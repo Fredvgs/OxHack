@@ -8,16 +8,11 @@ forecast member as the "true" weather.
 
 import numpy as np
 
-<<<<<<< Updated upstream
-from harvest.planner import WAIT, plan
+from harvest.planner import WAIT, plan_urgencygreedy
 from harvest.value import field_values, predict_moisture, start_moisture
-=======
-from harvest.planner import WAIT, plan_vgreedy, plan_urgencygreedy
-from harvest.value import field_values, predict_moisture
->>>>>>> Stashed changes
 
 
-def run_season(weather, params, planner=plan_urgencygreedy): #choose which planner to employ here
+def run_season(weather, params, planner=plan_urgencygreedy):  # choose which planner to employ here
     """Simulate the season.
 
     weather: {name: [member, field, hour]}  from forecast.load_forecast

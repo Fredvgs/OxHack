@@ -2,19 +2,22 @@
 # Units are in the names: _gbp = £, _ha = hectares, _hours, _pct = %, _mm = millimetres.
 
 #Simulation
-season_hours: 168       # how many hours we simulate, 168 = 1 week
+season_hours: 126       # how many hours we simulate, must fit in forecast_hours (126 = 21 replans)
 plan_hours: 48           # how far ahead each plan looks (must be >= sensor_every_hours)
 sensor_every_hours: 6    # a new moisture reading arrives this often, recall forecast and replan at this interval
 truth_member: 0          # forecast member that plays "the weather that really happened"
 
 #Farm
 fields:   # lat/lon are only used to download a forecast.
-  - {name: kidlington,    crop: wheat,  area_ha: 40, lat: 51.83, lon: -1.29}
-  - {name: bicester_road, crop: barley, area_ha: 35, lat: 51.90, lon: -1.17}
-  - {name: witney_lane,   crop: wheat,  area_ha: 30, lat: 51.79, lon: -1.45}
-  - {name: cumnor_hill,   crop: barley, area_ha: 45, lat: 51.73, lon: -1.34}
-  - {name: thame_vale,    crop: wheat,  area_ha: 25, lat: 51.74, lon: -1.02}
-  - {name: garsington,    crop: barley, area_ha: 30, lat: 51.71, lon: -1.16}
+  # Demo farm: each field borrows the weather of a different European place, picked from 21 so
+  # the fields' rain and humidity differ as much as possible (fields near each other all get the
+  # same weather). travel_hours below is still a compact farm; it ignores these coordinates.
+  - {name: inverness_uk,  crop: wheat,  area_ha: 40, lat: 57.48, lon: -4.22}
+  - {name: cork_ie,       crop: barley, area_ha: 35, lat: 51.90, lon: -8.47}
+  - {name: valladolid_es, crop: wheat,  area_ha: 30, lat: 41.65, lon: -4.72}
+  - {name: poznan_pl,     crop: barley, area_ha: 45, lat: 52.40, lon: 16.90}
+  - {name: bergen_no,     crop: wheat,  area_ha: 25, lat: 60.39, lon: 5.32}
+  - {name: cherkasy_ua,   crop: barley, area_ha: 30, lat: 49.40, lon: 32.00}
 
 machines:  # start = "depot" or a field name
   - {name: combine_a, ha_per_hour: 3.0, start: depot}
@@ -55,5 +58,5 @@ loss_pct_per_hour: 0.05               # crop value lost per hour it stays in the
 
 #Forecast download (only used by data/download_forecast.py)
 forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv
-forecast_hours: 120                   # the 9 km model only reaches ~144 h past its run time
+forecast_hours: 127                   # all the 9 km model gives from forecast_start (~144 h past its run)
 forecast_model: ecmwf_ifs_europe_ensemble  # ECMWF IFS native 9 km ensemble, 51 members

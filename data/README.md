@@ -4,9 +4,12 @@
 for every field and hour. The committed copy is real ECMWF IFS ensemble data at its native 9 km
 resolution (`ecmwf_ifs_europe_ensemble`) from the
 [Open-Meteo Ensemble API](https://open-meteo.com/en/docs/ensemble-api), `forecast_hours` from
-`forecast_start` in `params.yaml`. At 9 km each field gets its own weather (the 25 km
-`ecmwf_ifs025` grid shares cells between nearby fields). The 9 km model stops ~144 h after its
-run time, so keep `forecast_hours` inside that, and at least `season_hours + plan_hours`.
+`forecast_start` in `params.yaml`. The 9 km model covers Europe only and stops ~144 h after its
+run time, so keep `forecast_hours` inside that, and at least `season_hours`.
+
+The demo fields borrow weather from places across Europe (Inverness to Ukraine), because fields
+close together all get the same weather. Their `lat`/`lon` only pick the weather; driving times
+come from `travel_hours`.
 
 ## Format
 
@@ -23,7 +26,7 @@ One row per hour, member and field:
 
 ```
 hour,member,field,temp_c,humidity_pct,rain_mm
-0,0,kidlington,10.9,68,0.0
+0,0,inverness_uk,10.9,68,0.0
 ```
 
 Every field in `params.yaml` needs the same set of members and hours. Extra columns are ignored.

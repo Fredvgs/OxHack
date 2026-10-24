@@ -1,0 +1,53 @@
+# Every number the model uses lives in this file. Change anything here; no code edits needed.
+# Units are in the names: _gbp = £, _ha = hectares, _hours, _pct = %, _mm = millimetres.
+
+#Simulation
+season_hours: 48         # how many hours we simulate
+plan_hours: 48           # how far ahead each plan looks (must be >= sensor_every_hours)
+sensor_every_hours: 6    # a new moisture reading arrives this often, and then we replan
+truth_member: 0          # forecast member that plays "the weather that really happened"
+
+#Farm
+fields:   # start_moisture_pct = grain moisture at hour 0. lat/lon are only used to download a forecast.
+  - {name: kidlington,    crop: wheat,  area_ha: 40, lat: 51.83, lon: -1.29, start_moisture_pct: 18}
+  - {name: bicester_road, crop: barley, area_ha: 35, lat: 51.90, lon: -1.17, start_moisture_pct: 17}
+  - {name: witney_lane,   crop: wheat,  area_ha: 30, lat: 51.79, lon: -1.45, start_moisture_pct: 20}
+  - {name: cumnor_hill,   crop: barley, area_ha: 45, lat: 51.73, lon: -1.34, start_moisture_pct: 16}
+  - {name: thame_vale,    crop: wheat,  area_ha: 25, lat: 51.74, lon: -1.02, start_moisture_pct: 19}
+  - {name: garsington,    crop: barley, area_ha: 30, lat: 51.71, lon: -1.16, start_moisture_pct: 21}
+
+machines:  # start = "depot" or a field name
+  - {name: combine_a, ha_per_hour: 3.0, start: depot}
+  - {name: combine_b, ha_per_hour: 2.5, start: depot}
+  - {name: combine_c, ha_per_hour: 2.0, start: depot}
+
+# Driving time in hours. Rows and columns: the fields in the order above, then the depot last.
+# The simulator rounds up to whole hours.
+travel_hours:
+  - [0.00, 0.50, 0.50, 0.50, 1.00, 0.75, 0.25]
+  - [0.50, 0.00, 1.00, 1.00, 1.00, 1.00, 0.75]
+  - [0.50, 1.00, 0.00, 0.50, 1.25, 1.00, 0.50]
+  - [0.50, 1.00, 0.50, 0.00, 1.00, 0.50, 0.25]
+  - [1.00, 1.00, 1.25, 1.00, 0.00, 0.50, 0.75]
+  - [0.75, 1.00, 1.00, 0.50, 0.50, 0.00, 0.50]
+  - [0.25, 0.75, 0.50, 0.25, 0.75, 0.50, 0.00]
+
+#Crops
+crops:
+  wheat:  {price_gbp_per_t: 190, yield_t_per_ha: 8.5}
+  barley: {price_gbp_per_t: 170, yield_t_per_ha: 7.0}
+
+#Value function (harvest/value.py)
+target_moisture_pct: 14.5             # grain is sold at this moisture; anything wetter must be dried
+drying_cost_gbp_per_t_per_pct: 1.5    # cost to dry 1 tonne by 1 percentage point
+max_harvest_moisture_pct: 25          # too wet to combine above this
+min_moisture_pct: 12                  # grain never dries below this in the field
+drying_pct_per_hour: 0.3              # drying per hour in bone-dry air (scaled by (100 - humidity) / 100)
+rewetting_pct_per_mm: 0.5             # moisture gained per mm of rain
+rain_limit_mm: 0.2                    # no harvesting in an hour with more rain than this
+loss_pct_per_hour: 0.05               # crop value lost per hour it stays in the field
+
+#Forecast download (only used by data/download_forecast.py)
+forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv
+forecast_hours: 96
+forecast_model: ecmwf_ifs025          # ECMWF IFS 0.25 degree ensemble, 51 members

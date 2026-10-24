@@ -39,7 +39,7 @@ data/forecast.csv        prediction data: rain + humidity for 51 possible future
 harvest/value.py         value function: expected £/ha if a field is harvested in each hour
        │
        ▼
-harvest/planner.py       planner: which field each machine works on, each hour
+harvest/planners/        planners: which field each machine works on, each hour
        │
        ▼
 harvest/simulate.py      replanning loop: machines follow the plan; every few hours a new
@@ -61,7 +61,7 @@ same and you can rewrite any piece.
 | `params.yaml` | every number: fields, machines, crop prices, thresholds, timings |
 | `run.py` | runs everything, prints results, plots them |
 | `compare.py` | runs every `plan_*` planner, plots each one, then one window comparing them |
-| `harvest/` | the pipeline: `forecast.py`, `value.py`, `planner.py`, `simulate.py` |
+| `harvest/` | the pipeline: `forecast.py`, `value.py`, `planners/` (one file per planner), `simulate.py` |
 | `data/` | the forecast CSV, its format, and a script to download a fresh one |
 | `tests/` | `uv run pytest` |
 | `pyproject.toml`, `uv.lock`, `.python-version` | project setup used by uv; don't edit by hand |

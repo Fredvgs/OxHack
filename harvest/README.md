@@ -53,20 +53,35 @@ With `weather["moisture_pct"]` it takes the moisture forecast, shifted so each m
 the latest reading (keeping that member's hour-to-hour change). Without it, a simple model
 (dries with low humidity, wets with rain).
 
+And **`member_values(...)`**: same inputs, out `[M, F, H]`, the value in each member before
+averaging. `field_values` is its average over members.
+
 And **`start_moisture(weather, params)`**: in `[M, F, H]`, out `[F]` grain moisture (%) of each
 field at hour 0: hour 0 of `weather["moisture_pct"]` averaged over members, or the placeholder
 `temp_start_moisture_pct` for every field when there is no moisture forecast.
 
-## 3. `planner.py`: `plan(value, state, params)`
+## 3. `planners/`: `plan_*(value, state, params)`
 
-Decides which field each machine works on, hour by hour.
+Decides which field each machine works on, hour by hour. One file per architecture, each with a
+short README on the method:
+
+| File | Planners | Notes |
+|---|---|---|
+| `greedy.py` | `plan_vgreedy`, `plan_urgencygreedy`, `plan_urgencygreedy_withlookahead` | `README_greedy.md` |
+| `lagrangian.py` | `plan_lagrangian` | `README_lagrangian.md` |
+| `mpc.py` | `plan_mpc` | `README_mpc.md` |
+
+`from harvest.planners import plan_mpc` works for any of them. A new planner goes in its own file
+and in `__all__` in `planners/__init__.py`, which is what `compare.py` runs. Every planner has the
+same inputs and outputs:
 
 | | Name | Type / shape | Meaning |
 |---|---|---|---|
 | in | `value` | `[F, H]` | from `field_values` |
 | in | `state["remaining_ha"]` | `[F]` | hectares still standing in each field |
 | in | `state["machine_at"]` | `[K]` int | where each machine is: field index `0..F-1`, or `F` = depot |
-| out | `schedule` | `[K, H]` int | field index each machine should work on each hour, or `-1` = wait |
+| in | `state["value_by_member"]` | `[M, F, H]` | optional: £/ha in each forecast member (`value` is their average). `simulate.py` passes it; only `plan_mpc` uses it |
+| out | `schedule` | `[K, H]` int | field index each machine should work on each hour, `F` = go to the depot, or `-1` = wait where it is |
 
 The planner only says where machines should be. Driving time and harvesting happen in the simulator.
 
@@ -91,7 +106,9 @@ What it does:
    2. calls `field_values` on the other members, starting from that reading;
    3. calls the planner for a new schedule.
 3. Every hour, each machine follows the schedule:
-   - a new field means driving there first (`travel_hours`, rounded up to whole hours);
+   - a new field (or the depot) means driving there first (`travel_hours`, rounded up to whole
+     hours); a machine already driving finishes the trip before it follows a new plan;
+   - at the depot it does nothing;
    - at its field it cuts `ha_per_hour`, only if the true value that hour is above 0, until the field is empty;
    - money = hectares cut × the true £/ha.
 

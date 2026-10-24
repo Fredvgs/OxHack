@@ -53,6 +53,48 @@ rewetting_pct_per_mm: 0.5             # moisture gained per mm of rain
 rain_limit_mm: 0.2                    # no harvesting in an hour with more rain than this
 loss_pct_per_hour: 0.05               # crop value lost per hour it stays in the field
 
+#Grain moisture model (harvest/moisture.py). Not wired into the pipeline yet.
+# Temperatures in °C, RH as a decimal (0.65 = 65%), moisture inside the model is dry basis (kg/kg).
+moisture_model:
+  gas_constant_j_per_mol_k: 8.314
+  kelvin_offset: 273.15
+  rh_min: 0.05                        # RH is clipped to [rh_min, rh_max]: Henderson blows up as RH -> 1
+  rh_max: 0.95                        # (and was only fitted for 35-85% RH, -2 to 28 °C)
+  crops:
+    # Equilibrium moisture, modified Henderson: EMC_db% = (-ln(1 - RH) / (K (T + C)))^(1/N)
+    #   Source: NOT the official ASABE D245.7 values (paywalled). K, C, N fitted by non-linear least
+    #   squares to the PAMI "Equilibrium Moisture Content Charts for Grain Storage Management"
+    #   (built from ASAE D245.5 data), read as wet basis and converted to dry basis. Fit error
+    #   <= 0.05 points wb. K and C trade off, so don't read them individually. To use D245.7, replace
+    #   henderson_k/c/n here.
+    # start_moisture_pct: grain moisture (% wet basis) at hour 0 of the forecast. PLACEHOLDERS for
+    #   now, replace with a field reading when there is one.
+    # Drying rate, Arrhenius: k = k_ref exp(-(Ea/R)(1/T_K - 1/T_ref_K)), in 1/hour (Lewis model)
+    #   Source (wheat, barley): Noroña et al., "Drying kinetics of wheat, barley and maize grain":
+    #   k_ref = slope of ln(MR) vs t at 40 °C (Table 1), Ea from their Arrhenius fit of Deff (Table 3).
+    #   Forced-air dryer tests at 40-60 °C, ~6% RH, so 0-30 °C in the field is an extrapolation.
+    wheat:  {henderson_k: 2.2846e-5, henderson_c: 55.990,  henderson_n: 2.2876,
+             k_ref_per_hour: 0.1255, t_ref_c: 40, ea_j_per_mol: 50630, start_moisture_pct: 20}
+    barley: {henderson_k: 2.2451e-5, henderson_c: 197.489, henderson_n: 2.0160,
+             k_ref_per_hour: 0.1653, t_ref_c: 40, ea_j_per_mol: 55890, start_moisture_pct: 20}
+    # oilseed rape (canola). k_ref_per_hour is a PLACEHOLDER: copied from wheat, no sourced value.
+    #   Ea from rapeseed thin-layer drying studies ("Thin layer drying rate and loss of viability
+    #   modelling for rapeseed (canola)"; a later study gives 27,860 J/mol).
+    osr:    {henderson_k: 5.0569e-4, henderson_c: 39.978,  henderson_n: 1.5714,
+             k_ref_per_hour: 0.126,  t_ref_c: 40, ea_j_per_mol: 28470, start_moisture_pct: 14}
+
+# Synthetic weather and ranges for plot_moisture_demo.py and moisture_sensitivity.py (made-up numbers)
+moisture_demo:
+  days: 7
+  mean_temp_c: 15
+  temp_swing_c: 6                     # temperature goes this far above and below the mean each day
+  warmest_hour: 15                    # hour of day with the highest temperature and lowest RH
+  mean_rh: 0.75
+  rh_swing: 0.18                      # RH goes this far above and below the mean each day
+  ea_range_j_per_mol: [30000, 55000]  # sensitivity: Ea values tried, evenly spaced...
+  ea_steps: 6                         # ...this many of them
+  k_ref_scales: [0.5, 1.5]            # sensitivity: k_ref multiplied by each of these (±50%)
+
 #Forecast download (only used by data/download_forecast.py)
 forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv
 forecast_hours: 120                   # the 9 km model only reaches ~144 h past its run time

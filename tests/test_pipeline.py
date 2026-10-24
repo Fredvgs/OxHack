@@ -6,11 +6,12 @@ import numpy as np
 import pytest
 import yaml
 
-from harvest.forecast import load_forecast
+from harvest.forecast import load_forecast, load_moisture
 from harvest.simulate import run_season
 from harvest.value import drying_cost_gbp_per_t, field_values, start_moisture
 
 ROOT = Path(__file__).parent.parent
+MOISTURE_CSV = ROOT / "outputs" / "moisture_forecast.csv"
 
 
 def demo_params():
@@ -86,6 +87,41 @@ def test_drying_cost_follows_camgrain_bands():
     assert cost[0, 1, -1] == pytest.approx(9)
 
 
+def test_moisture_csv_gives_each_field_its_own_crop(tmp_path):
+    params = demo_params()
+    params["fields"] = [{"name": "f0", "crop": "wheat"}, {"name": "f1", "crop": "barley"}]
+    rows = ["hour,member,field,wheat_moisture_pct,barley_moisture_pct"]
+    for member in range(2):
+        for hour in range(3):
+            for field in ["f1", "f0"]:  # out of order on purpose
+                rows.append(f"{hour},{member},{field},{20 + hour},{10 + member}")
+    path = tmp_path / "moisture.csv"
+    path.write_text("\n".join(rows))
+    moisture = load_moisture(path, params)  # [member, field, hour]
+    assert moisture.shape == (2, 2, 3)
+    assert moisture[1, 0] == pytest.approx([20, 21, 22])  # f0 is wheat
+    assert moisture[1, 1] == pytest.approx([11, 11, 11])  # f1 is barley
+    assert drying_cost_gbp_per_t(moisture, params).shape == (2, 2, 3)
+
+
+def test_value_uses_moisture_forecast_shifted_to_the_reading():
+    params, weather = tiny_farm()
+    params["crops"]["dear"]["price_gbp_per_t"] = 200
+    # the moisture model says field 1 dries 1 point per hour from 18%
+    weather["moisture_pct"] = np.tile([18.0, 17.0, 16.0, 15.0], (2, 2, 1))  # [member, field, hour]
+    assert start_moisture(weather, params) == pytest.approx([18, 18])
+    # a reading of 16% keeps the same drying, just 2 points lower: 16, 15, 14, 13
+    value = field_values(weather, np.array([16.0, 16.0]), params)
+    assert value[1, 3] == pytest.approx(200)  # 13% is dry enough to cost nothing
+    assert value[1, 0] < value[1, 3]  # wetter grain costs more to dry
+
+
+def test_moisture_csv_must_match_the_forecast():
+    params = demo_params()
+    weather = load_forecast(ROOT / "data" / "forecast.csv", params, MOISTURE_CSV)
+    assert weather["moisture_pct"].shape == weather["rain_mm"].shape
+
+
 def test_simulator_counts_driving_and_harvesting():
     params, weather = tiny_farm()
     assert run_season(weather, params, stay_on_field_0)["total_gbp"] == pytest.approx(200)
@@ -99,7 +135,7 @@ def test_planner_finds_the_best_answer_on_the_tiny_farm():
 
 def test_demo_runs_end_to_end():
     params = demo_params()
-    weather = load_forecast(ROOT / "data" / "forecast.csv", params)
+    weather = load_forecast(ROOT / "data" / "forecast.csv", params, MOISTURE_CSV)
     result = run_season(weather, params)
     assert result["total_gbp"] > 0
     assert result["remaining_ha"].min() >= 0

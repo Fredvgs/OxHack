@@ -8,8 +8,8 @@ forecast member as the "true" weather.
 
 import numpy as np
 
-from harvest.planner import WAIT, plan_urgencygreedy
-from harvest.value import field_values, predict_moisture, start_moisture
+from harvest.planners import WAIT, plan_urgencygreedy
+from harvest.value import field_values, member_values, predict_moisture, start_moisture
 
 
 def run_season(weather, params, planner=plan_urgencygreedy):  # choose which planner to employ here
@@ -18,6 +18,7 @@ def run_season(weather, params, planner=plan_urgencygreedy):  # choose which pla
     weather: {name: [member, field, hour]}  from forecast.load_forecast
     params:  settings from params.yaml
     planner: function(value, state, params) -> schedule [machine, hour]
+             (field index, number of fields = go to the depot, WAIT = stay where it is)
     returns: {
         "total_gbp":    float            money earned
         "earned_gbp":   [hour]           money earned in each hour
@@ -57,9 +58,14 @@ def run_season(weather, params, planner=plan_urgencygreedy):  # choose which pla
             end = hour + params["plan_hours"]  # int
             # {name: [member - 1, field, plan_hour]}
             upcoming = {name: values[:, :, hour:end] for name, values in forecast.items()}
-            # [field, plan_hour] £/ha
-            value = field_values(upcoming, reading, params, first_hour=hour)
-            state = {"remaining_ha": remaining.copy(), "machine_at": machine_at.copy()}
+            # [member - 1, field, plan_hour] £/ha
+            by_member = member_values(upcoming, reading, params, first_hour=hour)
+            value = by_member.mean(axis=0)  # [field, plan_hour] £/ha, same as field_values
+            state = {
+                "remaining_ha": remaining.copy(),
+                "machine_at": machine_at.copy(),
+                "value_by_member": by_member,  # optional extra; only plan_mpc uses it
+            }
             schedule = planner(value, state, params)  # [machine, plan_hour] field index or WAIT
             plans.append({"hour": hour, "value": value, "schedule": schedule})
             plan_start = hour  # int, season hour of schedule column 0
@@ -70,7 +76,8 @@ def run_season(weather, params, planner=plan_urgencygreedy):  # choose which pla
                 arrives_at[m] = hour + travel[machine_at[m], target]  # start driving
                 machine_at[m] = target
             arrived = hour >= arrives_at[m] and target == machine_at[m]  # bool
-            if arrived and remaining[target] > 0 and true_value[target, hour] > 0:
+            in_field = target < len(fields)  # bool, False at the depot
+            if arrived and in_field and remaining[target] > 0 and true_value[target, hour] > 0:
                 ha = min(remaining[target], machine["ha_per_hour"])  # float
                 remaining[target] -= ha
                 earned[hour] += ha * true_value[target, hour]

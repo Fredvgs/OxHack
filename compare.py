@@ -2,9 +2,9 @@
 
 uv run python compare.py
 
-Every function in harvest/planner.py whose name starts with `plan_` is picked up automatically,
-so a new planner shows up here as soon as you write it. Each planner gets the standard run.py
-window, then one extra window puts them all side by side.
+Every `plan_*` function listed in `__all__` in harvest/planners/__init__.py is picked up
+automatically, so a new planner shows up here as soon as you add it there. Each planner gets the
+standard run.py window, then one extra window puts them all side by side.
 """
 
 from pathlib import Path
@@ -13,18 +13,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 
-from harvest import planner
+from harvest import planners
 from harvest.forecast import load_forecast
 from harvest.simulate import run_season
 from run import FORECAST_CSV, MOISTURE_CSV, mark_new_forecasts, plot_results
 
 ROOT = Path(__file__).parent
 
-# every plan_* function in harvest/planner.py, named without the prefix: {"vgreedy": plan_vgreedy}
+# every plan_* in harvest/planners, named without the prefix: {"vgreedy": plan_vgreedy}
 PLANNERS = {
-    name.removeprefix("plan_"): function
-    for name, function in vars(planner).items()
-    if name.startswith("plan_") and callable(function)
+    name.removeprefix("plan_"): getattr(planners, name)
+    for name in planners.__all__
+    if name.startswith("plan_")
 }
 
 # one colour per planner, in this order (checked to be colourblind-safe); planners past 8 are grey

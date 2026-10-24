@@ -83,6 +83,14 @@ def field_values(weather, start_moisture, params, first_hour=0):
     first_hour:     int                            season hour of the first column
     returns:        [field, hour]                  £/ha, averaged over forecast members
     """
+    return member_values(weather, start_moisture, params, first_hour).mean(axis=0)
+
+
+def member_values(weather, start_moisture, params, first_hour=0):
+    """£ per hectare if each field is harvested in each hour, in each forecast member separately.
+
+    Same inputs as field_values. returns: [member, field, hour] £/ha, 0 when it can't be harvested
+    """
     moisture = predict_moisture(start_moisture, weather, params)  # [member, field, hour]
 
     price = crop_numbers(params, "price_gbp_per_t")
@@ -98,4 +106,4 @@ def field_values(weather, start_moisture, params, first_hour=0):
     # no harvesting in the rain, or when the grain is too wet
     no_rain = weather["rain_mm"] <= params["rain_limit_mm"]
     dry_enough = moisture <= params["max_harvest_moisture_pct"]
-    return (gbp_per_ha * (no_rain & dry_enough)).mean(axis=0)
+    return gbp_per_ha * (no_rain & dry_enough)

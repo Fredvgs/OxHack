@@ -3,7 +3,7 @@
 
 #Simulation
 season_hours: 126       # how many hours we simulate, must fit in forecast_hours (126 = 21 replans)
-plan_hours: 48           # how far ahead each plan looks (must be >= sensor_every_hours)
+plan_hours: 126          # how far ahead each plan looks (must be >= sensor_every_hours)
 sensor_every_hours: 6    # a new moisture reading arrives this often, recall forecast and replan at this interval
 truth_member: 0          # forecast member that plays "the weather that really happened"
 
@@ -56,10 +56,20 @@ rewetting_pct_per_mm: 0.5             # moisture gained per mm of rain
 rain_limit_mm: 0.2                    # no harvesting in an hour with more rain than this
 loss_pct_per_hour: 0.05               # crop value lost per hour it stays in the field
 
-#Planner: plan_lagrangian (harvest/planner.py)
+#Planner: plan_lagrangian (harvest/planners/lagrangian.py)
 lagrangian_iterations: 300            # price updates per plan (subgradient steps)
 lagrangian_first_step_gbp_per_ha: 50  # size of the first price update; step k is this / k
 lagrangian_wait_margin_gbp_per_ha: 5  # only wait for a later hour if it's worth this much more per ha
+
+#Planner: plan_mpc (harvest/planners/mpc.py)
+# The two costs only steer the plan; simulate.py's £ earned doesn't include them. Made-up numbers.
+mpc_scenarios: 50                     # forecast members each plan is scored in; 0 = the average only
+mpc_rounds: 5                         # most times each combine re-plans its route around the others
+mpc_route_passes: 3                   # tries per re-plan, each one knowing which fields the last emptied
+mpc_idle_in_field_gbp_per_hour: 20    # a combine parked in a field with nothing to cut (0 at the depot)
+mpc_drive_gbp_per_hour: 10            # fuel and wear while driving between places
+mpc_terminal_hours: 24                # grain standing when the plan ends is worth its average value
+mpc_terminal_value_pct: 100           # over the plan's last this-many hours, times this %
 
 #Grain moisture model (harvest/moisture.py). Not wired into the pipeline yet.
 # Temperatures in °C, RH as a decimal (0.65 = 65%), moisture inside the model is dry basis (kg/kg).

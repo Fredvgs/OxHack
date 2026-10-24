@@ -16,7 +16,7 @@ import yaml
 from harvest import planner
 from harvest.forecast import load_forecast
 from harvest.simulate import run_season
-from run import plot_results
+from run import mark_new_forecasts, plot_results
 
 ROOT = Path(__file__).parent
 
@@ -69,6 +69,7 @@ def plot_comparison(results):
     top.set_title("Money earned over the season")
     top.yaxis.set_major_formatter("{x:,.0f}")
     top.grid(axis="y", alpha=0.3)
+    mark_new_forecasts(top, result)  # every planner replans at the same hours
     top.legend(frameon=False)
 
     # 2. season total per planner, best at the top (barh draws the first bar at the bottom)

@@ -1,9 +1,12 @@
 # data/: prediction data
 
 `forecast.csv` is the weather forecast the pipeline runs on: 51 possible futures ("members")
-for every field and hour. The committed copy is real ECMWF ensemble data from the
+for every field and hour. The committed copy is real ECMWF IFS ensemble data at its native 9 km
+resolution (`ecmwf_ifs_europe_ensemble`) from the
 [Open-Meteo Ensemble API](https://open-meteo.com/en/docs/ensemble-api), `forecast_hours` from
-`forecast_start` in `params.yaml`.
+`forecast_start` in `params.yaml`. At 9 km each field gets its own weather (the 25 km
+`ecmwf_ifs025` grid shares cells between nearby fields). The 9 km model stops ~144 h after its
+run time, so keep `forecast_hours` inside that, and at least `season_hours + plan_hours`.
 
 ## Format
 

@@ -55,7 +55,13 @@ def main():
                 rows.append(row)
 
     table = pd.DataFrame(rows)
-    table["rain_mm"] = table["rain_mm"].fillna(0).clip(lower=0)  # the API rounds tiny values to -0.1
+    # hours past the end of the model run come back empty; fail rather than fill them with 0
+    empty = table[list(API_VARIABLES.values())].isna().all(axis=1)
+    if empty.any():
+        first_hour = table.loc[empty, "hour"].min()
+        raise ValueError(f"no data from hour {first_hour}: lower forecast_hours in params.yaml")
+    # the API rounds tiny values to -0.1
+    table["rain_mm"] = table["rain_mm"].fillna(0).clip(lower=0)
     for column in ["temp_c", "humidity_pct"]:
         table[column] = table[column].ffill().bfill()  # fill the odd missing hour
     table.to_csv(ROOT / "data" / "forecast.csv", index=False)

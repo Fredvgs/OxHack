@@ -55,5 +55,5 @@ loss_pct_per_hour: 0.05               # crop value lost per hour it stays in the
 
 #Forecast download (only used by data/download_forecast.py)
 forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv
-forecast_hours: 168
-forecast_model: ecmwf_ifs025          # ECMWF IFS 0.25 degree ensemble, 51 members
+forecast_hours: 120                   # the 9 km model only reaches ~144 h past its run time
+forecast_model: ecmwf_ifs_europe_ensemble  # ECMWF IFS native 9 km ensemble, 51 members

@@ -41,10 +41,13 @@ def plot_results(result, params):
     n_fields = len(field_names)
     fig, (top, middle, bottom) = plt.subplots(3, 1, figsize=(10, 9), sharex=True)
 
-    # 1. what the planner expected each field to be worth (first plan)
-    image = top.imshow(result["plans"][0]["value"], aspect="auto", cmap="viridis")
+    # 1. what the planner expected each field to be worth. Each plan is only followed until the
+    # next forecast arrives, so stitch together those first hours of every plan.
+    used = [plan["value"][:, : params["sensor_every_hours"]] for plan in result["plans"]]
+    value = np.concatenate(used, axis=1)[:, : params["season_hours"]]  # [field, hour] £/ha
+    image = top.imshow(value, aspect="auto", cmap="viridis")
     top.set_yticks(range(n_fields), field_names)
-    top.set_title("Expected £/ha if harvested (first plan)")
+    top.set_title("Expected £/ha if harvested (the plan being followed)")
     fig.colorbar(image, ax=top, label="£/ha")
 
     # 2. which field each machine actually harvested (blank = driving or waiting)
@@ -60,8 +63,19 @@ def plot_results(result, params):
     bottom.set_ylabel("£ earned so far")
     bottom.set_xlabel("hour")
     bottom.set_title("Money earned")
+    # an empty colour bar slot, so all three charts are the same width and their hours line up
+    fig.colorbar(image, ax=bottom).ax.set_visible(False)
+
+    for ax in (top, middle, bottom):
+        mark_new_forecasts(ax, result)
     fig.tight_layout()
     return fig
+
+
+def mark_new_forecasts(ax, result):
+    """Dashed vertical line at every hour a new moisture reading arrived and we replanned."""
+    for plan in result["plans"][1:]:  # skip hour 0, the start of the chart
+        ax.axvline(plan["hour"] - 0.5, color="grey", linestyle="--", linewidth=0.8)
 
 
 if __name__ == "__main__":

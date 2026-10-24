@@ -2,7 +2,7 @@
 # Units are in the names: _gbp = £, _ha = hectares, _hours, _pct = %, _mm = millimetres.
 
 #Simulation
-season_hours: 168       # how many hours we simulate, 168 = 1 week
+season_hours: 120     # how many hours we simulate, 168 = 1 week
 plan_hours: 48           # how far ahead each plan looks (must be >= sensor_every_hours)
 sensor_every_hours: 6    # a new moisture reading arrives this often, recall forecast and replan at this interval
 truth_member: 0          # forecast member that plays "the weather that really happened"

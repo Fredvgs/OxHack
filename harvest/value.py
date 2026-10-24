@@ -9,22 +9,32 @@ import numpy as np
 def start_moisture(weather, params):
     """Grain moisture (%) of every field at hour 0.
 
-    The moisture vs time graph will provide this. Until then every field gets the same
-    placeholder, temp_start_moisture_pct.
+    From the moisture forecast (weather["moisture_pct"], averaged over members) when it is
+    loaded, otherwise the same placeholder, temp_start_moisture_pct, for every field.
 
-    weather: {name: [member, field, hour]}  forecast (unused by the placeholder)
+    weather: {name: [member, field, hour]}  forecast
     returns: [field]                        grain moisture at hour 0, %
     """
+    if "moisture_pct" in weather:
+        return weather["moisture_pct"][:, :, 0].mean(axis=0)
     return np.full(len(params["fields"]), float(params["temp_start_moisture_pct"]))
 
 
 def predict_moisture(start_moisture, weather, params):
-    """Grain moisture (%) at the start of every hour.
+    """Grain moisture (%) every hour, starting from the latest reading.
+
+    With weather["moisture_pct"] (the moisture forecast CSV, see harvest/moisture.py) each member
+    keeps its own hour-to-hour change but is shifted to start at the reading. Without it, a
+    simple model: dries with low humidity, wets with rain.
 
     start_moisture: [field]                        latest moisture reading, %
-    weather:        {name: [member, field, hour]}  needs "rain_mm" and "humidity_pct"
+    weather:        {name: [member, field, hour]}  "moisture_pct", or "rain_mm" and "humidity_pct"
     returns:        [member, field, hour]          grain moisture, %
     """
+    if "moisture_pct" in weather:
+        moisture = weather["moisture_pct"]
+        return moisture - moisture[:, :, :1] + start_moisture[None, :, None]
+
     rain = weather["rain_mm"]
     humidity = weather["humidity_pct"]
     moisture = np.zeros(rain.shape)

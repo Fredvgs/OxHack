@@ -16,7 +16,7 @@ import yaml
 from harvest import planner
 from harvest.forecast import load_forecast
 from harvest.simulate import run_season
-from run import mark_new_forecasts, plot_results
+from run import FORECAST_CSV, MOISTURE_CSV, mark_new_forecasts, plot_results
 
 ROOT = Path(__file__).parent
 
@@ -34,7 +34,7 @@ GREY = "#8a8984"
 
 def main():
     params = yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))
-    weather = load_forecast(ROOT / "data" / "forecast.csv", params)
+    weather = load_forecast(FORECAST_CSV, params, MOISTURE_CSV)
     results = {name: run_season(weather, params, function) for name, function in PLANNERS.items()}
     print_comparison(results)
     for name, result in results.items():

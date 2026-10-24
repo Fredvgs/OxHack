@@ -1,5 +1,7 @@
-"""Drying cost over the forecast for one field: predict_moisture -> drying_cost_gbp_per_t.
+"""Drying cost over the forecast for one field: moisture forecast CSV -> drying_cost_gbp_per_t.
 
+Moisture comes from outputs/moisture_forecast.csv; make it first with
+`uv run python moisture_forecast.py`.
 Run:  uv run python plot_drying_cost.py [field_name]   (default: the first field in params.yaml)
 """
 
@@ -10,10 +12,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 
-from harvest.forecast import load_forecast
-from harvest.value import drying_cost_gbp_per_t, predict_moisture, start_moisture
+from harvest.forecast import load_moisture
+from harvest.value import drying_cost_gbp_per_t
 
 ROOT = Path(__file__).parent
+MOISTURE_CSV = ROOT / "outputs" / "moisture_forecast.csv"
 OUTPUT = ROOT / "outputs" / "cost_curve.png"
 
 # Reference categorical palette (light mode), slots 1-2, and text/surface tokens.
@@ -40,8 +43,7 @@ def main():
     name = sys.argv[1] if len(sys.argv) > 1 else names[0]
     f = names.index(name)
 
-    weather = load_forecast(ROOT / "data" / "forecast.csv", params)
-    moisture = predict_moisture(start_moisture(weather, params), weather, params)
+    moisture = load_moisture(MOISTURE_CSV, params)  # [member, field, hour]
     cost = drying_cost_gbp_per_t(moisture, params)  # [member, field, hour]
 
     # cost per member first, then average, same as field_values does

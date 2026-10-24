@@ -13,11 +13,15 @@ from harvest.forecast import load_forecast
 from harvest.simulate import run_season
 
 ROOT = Path(__file__).parent
+FORECAST_CSV = ROOT / "data" / "forecast.csv"
+MOISTURE_CSV = (
+    ROOT / "outputs" / "moisture_forecast.csv"
+)  # make it: uv run python moisture_forecast.py
 
 
 def main():
     params = yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))
-    weather = load_forecast(ROOT / "data" / "forecast.csv", params)
+    weather = load_forecast(FORECAST_CSV, params, MOISTURE_CSV)
     result = run_season(weather, params)
     print_results(result, params)
     plot_results(result, params)

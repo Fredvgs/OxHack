@@ -27,6 +27,14 @@ Reads the prediction data.
 | out | `weather` | dict of 2 arrays | `weather["rain_mm"]`: `[M, F, H]` rain per hour, mm |
 | | | | `weather["humidity_pct"]`: `[M, F, H]` relative humidity, % |
 
+Optional third input **`moisture_path`**: `outputs/moisture_forecast.csv` (written by
+`moisture_forecast.py`). Adds `weather["moisture_pct"]`: `[M, F, H]` grain moisture (% wet basis,
+end of each hour), and the value function then uses it (see below). `run.py` and `compare.py`
+pass it. It must come from the same `forecast.csv`, or loading stops with an error.
+
+Also **`load_moisture(path, params)`**: reads just that CSV, out `[M, F, H]`, each field taking the
+column of its own crop. Feed it to `drying_cost_gbp_per_t` (see `plot_drying_cost.py`).
+
 ## 2. `value.py`: `field_values(weather, start_moisture, params, first_hour=0)`
 
 The value function: what is a field worth if we harvest it in a given hour?
@@ -39,12 +47,15 @@ The value function: what is a field worth if we harvest it in a given hour?
 | out | `value` | `[F, H]` | expected £ per hectare if harvested in that hour, averaged over members. 0 means "can't or shouldn't harvest" |
 
 Uses a helper, **`predict_moisture(start_moisture, weather, params)`**:
-in `[F]` and `[M, F, H]`, out `[M, F, H]` grain moisture (%) at the start of each hour.
+in `[F]` and `[M, F, H]`, out `[M, F, H]` grain moisture (%) each hour.
 The simulator also uses it to get the "true" moisture that the sensor reads.
+With `weather["moisture_pct"]` it takes the moisture forecast, shifted so each member starts at
+the latest reading (keeping that member's hour-to-hour change). Without it, a simple model
+(dries with low humidity, wets with rain).
 
 And **`start_moisture(weather, params)`**: in `[M, F, H]`, out `[F]` grain moisture (%) of each
-field at hour 0. This is where the moisture vs time graph plugs in. For now it returns the
-placeholder `temp_start_moisture_pct` for every field.
+field at hour 0: hour 0 of `weather["moisture_pct"]` averaged over members, or the placeholder
+`temp_start_moisture_pct` for every field when there is no moisture forecast.
 
 ## 3. `planner.py`: `plan(value, state, params)`
 

@@ -11,7 +11,7 @@ import numpy as np
 import yaml
 
 from harvest.forecast import load_forecast
-from harvest.value import drying_cost_gbp_per_t, predict_moisture
+from harvest.value import drying_cost_gbp_per_t, predict_moisture, start_moisture
 
 ROOT = Path(__file__).parent
 OUTPUT = ROOT / "outputs" / "cost_curve.png"
@@ -41,8 +41,7 @@ def main():
     f = names.index(name)
 
     weather = load_forecast(ROOT / "data" / "forecast.csv", params)
-    start_moisture = np.array([field["start_moisture_pct"] for field in params["fields"]])
-    moisture = predict_moisture(start_moisture, weather, params)  # [member, field, hour]
+    moisture = predict_moisture(start_moisture(weather, params), weather, params)
     cost = drying_cost_gbp_per_t(moisture, params)  # [member, field, hour]
 
     # cost per member first, then average, same as field_values does

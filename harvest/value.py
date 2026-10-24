@@ -6,6 +6,18 @@ Worked out separately for every forecast member, then averaged at the end.
 import numpy as np
 
 
+def start_moisture(weather, params):
+    """Grain moisture (%) of every field at hour 0.
+
+    The moisture vs time graph will provide this. Until then every field gets the same
+    placeholder, temp_start_moisture_pct.
+
+    weather: {name: [member, field, hour]}  forecast (unused by the placeholder)
+    returns: [field]                        grain moisture at hour 0, %
+    """
+    return np.full(len(params["fields"]), float(params["temp_start_moisture_pct"]))
+
+
 def predict_moisture(start_moisture, weather, params):
     """Grain moisture (%) at the start of every hour.
 

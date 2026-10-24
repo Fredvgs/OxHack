@@ -9,7 +9,7 @@ forecast member as the "true" weather.
 import numpy as np
 
 from harvest.planner import WAIT, plan
-from harvest.value import field_values, predict_moisture
+from harvest.value import field_values, predict_moisture, start_moisture
 
 
 def run_season(weather, params, planner=plan):
@@ -36,10 +36,9 @@ def run_season(weather, params, planner=plan):
     # {name: [member - 1, field, hour]}
     forecast = {name: np.delete(values, member, axis=0) for name, values in weather.items()}
 
-    # [field] %
-    start_moisture = np.array([field["start_moisture_pct"] for field in fields], dtype=float)
-    true_moisture = predict_moisture(start_moisture, truth, params)[0]  # [field, hour]
-    true_value = field_values(truth, start_moisture, params)  # [field, hour]
+    first_moisture = start_moisture(truth, params)  # [field] %
+    true_moisture = predict_moisture(first_moisture, truth, params)[0]  # [field, hour]
+    true_value = field_values(truth, first_moisture, params)  # [field, hour]
     travel = np.ceil(np.array(params["travel_hours"])).astype(int)  # [field+1, field+1] int hours
 
     remaining = np.array([field["area_ha"] for field in fields], dtype=float)  # [field] ha

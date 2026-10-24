@@ -10,7 +10,7 @@ Letters used for array sizes (numbers are for the demo):
 | `M` | forecast members (possible futures) | 51 in the CSV, 50 after one is held back as "truth" |
 | `F` | fields, in the order of `fields` in `params.yaml` | 6 |
 | `K` | machines, in the order of `machines` in `params.yaml` | 3 |
-| `H` | hours | 96 in the CSV, 48 per plan, 48 in the season |
+| `H` | hours | 168 in the CSV, 48 per plan, 48 in the season |
 
 `params` is always the dict loaded from `params.yaml`.
 
@@ -41,6 +41,10 @@ The value function: what is a field worth if we harvest it in a given hour?
 Uses a helper, **`predict_moisture(start_moisture, weather, params)`**:
 in `[F]` and `[M, F, H]`, out `[M, F, H]` grain moisture (%) at the start of each hour.
 The simulator also uses it to get the "true" moisture that the sensor reads.
+
+And **`start_moisture(weather, params)`**: in `[M, F, H]`, out `[F]` grain moisture (%) of each
+field at hour 0. This is where the moisture vs time graph plugs in. For now it returns the
+placeholder `temp_start_moisture_pct` for every field.
 
 ## 3. `planner.py`: `plan(value, state, params)`
 

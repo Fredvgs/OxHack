@@ -8,7 +8,7 @@ import yaml
 
 from harvest.forecast import load_forecast
 from harvest.simulate import run_season
-from harvest.value import drying_cost_gbp_per_t, field_values
+from harvest.value import drying_cost_gbp_per_t, field_values, start_moisture
 
 ROOT = Path(__file__).parent.parent
 
@@ -32,13 +32,14 @@ def tiny_farm():
         sensor_every_hours=4,
         loss_pct_per_hour=0,
         drying_pct_per_hour=0,
+        temp_start_moisture_pct=14,
         crops={
             "cheap": {"price_gbp_per_t": 50, "yield_t_per_ha": 1},
             "dear": {"price_gbp_per_t": 80, "yield_t_per_ha": 1},
         },
         fields=[
-            {"name": "f0", "crop": "cheap", "area_ha": 4, "start_moisture_pct": 14},
-            {"name": "f1", "crop": "dear", "area_ha": 2, "start_moisture_pct": 14},
+            {"name": "f0", "crop": "cheap", "area_ha": 4},
+            {"name": "f1", "crop": "dear", "area_ha": 2},
         ],
         machines=[{"name": "m0", "ha_per_hour": 1, "start": "f0"}],
         travel_hours=[[0, 2, 2], [2, 0, 2], [2, 2, 0]],
@@ -69,8 +70,7 @@ def test_forecast_loads_as_member_field_hour_arrays():
 def test_value_has_one_number_per_field_and_hour():
     params = demo_params()
     weather = load_forecast(ROOT / "data" / "forecast.csv", params)
-    moisture = np.array([field["start_moisture_pct"] for field in params["fields"]])
-    value = field_values(weather, moisture, params)
+    value = field_values(weather, start_moisture(weather, params), params)
     assert value.shape == weather["rain_mm"].shape[1:]
     assert (value >= 0).all()
 

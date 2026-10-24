@@ -8,13 +8,13 @@ sensor_every_hours: 6    # a new moisture reading arrives this often, and then w
 truth_member: 0          # forecast member that plays "the weather that really happened"
 
 #Farm
-fields:   # start_moisture_pct = grain moisture at hour 0. lat/lon are only used to download a forecast.
-  - {name: kidlington,    crop: wheat,  area_ha: 40, lat: 51.83, lon: -1.29, start_moisture_pct: 18}
-  - {name: bicester_road, crop: barley, area_ha: 35, lat: 51.90, lon: -1.17, start_moisture_pct: 17}
-  - {name: witney_lane,   crop: wheat,  area_ha: 30, lat: 51.79, lon: -1.45, start_moisture_pct: 20}
-  - {name: cumnor_hill,   crop: barley, area_ha: 45, lat: 51.73, lon: -1.34, start_moisture_pct: 16}
-  - {name: thame_vale,    crop: wheat,  area_ha: 25, lat: 51.74, lon: -1.02, start_moisture_pct: 19}
-  - {name: garsington,    crop: barley, area_ha: 30, lat: 51.71, lon: -1.16, start_moisture_pct: 21}
+fields:   # lat/lon are only used to download a forecast.
+  - {name: kidlington,    crop: wheat,  area_ha: 40, lat: 51.83, lon: -1.29}
+  - {name: bicester_road, crop: barley, area_ha: 35, lat: 51.90, lon: -1.17}
+  - {name: witney_lane,   crop: wheat,  area_ha: 30, lat: 51.79, lon: -1.45}
+  - {name: cumnor_hill,   crop: barley, area_ha: 45, lat: 51.73, lon: -1.34}
+  - {name: thame_vale,    crop: wheat,  area_ha: 25, lat: 51.74, lon: -1.02}
+  - {name: garsington,    crop: barley, area_ha: 30, lat: 51.71, lon: -1.16}
 
 machines:  # start = "depot" or a field name
   - {name: combine_a, ha_per_hour: 3.0, start: depot}
@@ -38,6 +38,8 @@ crops:
   barley: {price_gbp_per_t: 170, yield_t_per_ha: 7.0}
 
 #Value function (harvest/value.py)
+# TODO: remove once the moisture vs time graph gives each field's grain moisture at hour 0
+temp_start_moisture_pct: 18          # placeholder, same for every field
 # Drying: Camgrain charges, harvest 2026 (https://www.camgrain.co.uk/charges-for-2025)
 target_moisture_pct: 14.0             # the store dries grain down to this
 weight_loss_pct_per_pct: 1.25         # % of weight the store deducts per point of moisture removed
@@ -53,5 +55,5 @@ loss_pct_per_hour: 0.05               # crop value lost per hour it stays in the
 
 #Forecast download (only used by data/download_forecast.py)
 forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv
-forecast_hours: 96
+forecast_hours: 168
 forecast_model: ecmwf_ifs025          # ECMWF IFS 0.25 degree ensemble, 51 members

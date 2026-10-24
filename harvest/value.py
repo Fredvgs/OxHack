@@ -25,6 +25,34 @@ def predict_moisture(start_moisture, weather, params):
     return moisture
 
 
+def crop_numbers(params, key):
+    """One crop number per field, e.g. key="price_gbp_per_t". Returns [1, field, 1]."""
+    crops = [params["crops"][field["crop"]] for field in params["fields"]]
+    return np.array([crop[key] for crop in crops], dtype=float)[None, :, None]
+
+
+def drying_cost_gbp_per_t(moisture, params):
+    """£ per tonne to have the store dry the grain, using Camgrain's published charges.
+
+    Source: https://www.camgrain.co.uk/charges-for-2025 (cereals, harvest 2026). The handling
+    charge and throughput loss are paid whatever the moisture, so they're left out.
+
+    moisture: [member, field, hour]  grain moisture, % (from predict_moisture)
+    returns:  [member, field, hour]  drying charge + value of the weight deducted, £/t
+    """
+    # a flat charge per 0.5% band above 15%: 15.1-15.5% -> £2, 15.6-16.0% -> £4, ...
+    # (rounding first so 15.5% lands in the first band, not the second)
+    excess_pct = np.round(moisture, 1) - params["free_drying_up_to_pct"]
+    bands = np.maximum(0, np.ceil(np.round(excess_pct / params["drying_band_pct"], 6)))
+    charge_gbp_per_t = params["drying_charge_gbp_per_band"] * bands
+
+    # the store also keeps some weight for every point of moisture it removes
+    removed_pct = np.maximum(0, moisture - params["target_moisture_pct"])
+    weight_loss_pct = params["weight_loss_pct_per_pct"] * removed_pct
+    price = crop_numbers(params, "price_gbp_per_t")
+    return charge_gbp_per_t + price * weight_loss_pct / 100
+
+
 def field_values(weather, start_moisture, params, first_hour=0):
     """Expected £ per hectare if each field is harvested in each hour (0 when it can't be).
 
@@ -35,13 +63,11 @@ def field_values(weather, start_moisture, params, first_hour=0):
     """
     moisture = predict_moisture(start_moisture, weather, params)  # [member, field, hour]
 
-    crops = [params["crops"][field["crop"]] for field in params["fields"]]
-    price = np.array([crop["price_gbp_per_t"] for crop in crops])[None, :, None]
-    tonnes = np.array([crop["yield_t_per_ha"] for crop in crops])[None, :, None]
+    price = crop_numbers(params, "price_gbp_per_t")
+    tonnes = crop_numbers(params, "yield_t_per_ha")
 
-    # grain sold, minus the cost of drying anything wetter than the target
-    too_wet_pct = np.maximum(0, moisture - params["target_moisture_pct"])
-    gbp_per_ha = tonnes * (price - params["drying_cost_gbp_per_t_per_pct"] * too_wet_pct)
+    # grain sold, minus what the store charges to dry it
+    gbp_per_ha = tonnes * (price - drying_cost_gbp_per_t(moisture, params))
 
     # the longer the crop stands, the more of it is lost
     hours_waited = first_hour + np.arange(moisture.shape[2])

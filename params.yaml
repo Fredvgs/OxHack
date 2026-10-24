@@ -38,8 +38,12 @@ crops:
   barley: {price_gbp_per_t: 170, yield_t_per_ha: 7.0}
 
 #Value function (harvest/value.py)
-target_moisture_pct: 14.5             # grain is sold at this moisture; anything wetter must be dried
-drying_cost_gbp_per_t_per_pct: 1.5    # cost to dry 1 tonne by 1 percentage point
+# Drying: Camgrain charges, harvest 2026 (https://www.camgrain.co.uk/charges-for-2025)
+target_moisture_pct: 14.0             # the store dries grain down to this
+weight_loss_pct_per_pct: 1.25         # % of weight the store deducts per point of moisture removed
+free_drying_up_to_pct: 15.0           # no drying charge at or below this
+drying_band_pct: 0.5                  # the charge goes up in bands this wide...
+drying_charge_gbp_per_band: 2.0       # ...by this much per tonne per band
 max_harvest_moisture_pct: 25          # too wet to combine above this
 min_moisture_pct: 12                  # grain never dries below this in the field
 drying_pct_per_hour: 0.3              # drying per hour in bone-dry air (scaled by (100 - humidity) / 100)

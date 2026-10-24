@@ -8,7 +8,7 @@ import yaml
 
 from harvest.forecast import load_forecast
 from harvest.simulate import run_season
-from harvest.value import field_values
+from harvest.value import drying_cost_gbp_per_t, field_values
 
 ROOT = Path(__file__).parent.parent
 
@@ -37,8 +37,8 @@ def tiny_farm():
             "dear": {"price_gbp_per_t": 80, "yield_t_per_ha": 1},
         },
         fields=[
-            {"name": "f0", "crop": "cheap", "area_ha": 4, "start_moisture_pct": 14.5},
-            {"name": "f1", "crop": "dear", "area_ha": 2, "start_moisture_pct": 14.5},
+            {"name": "f0", "crop": "cheap", "area_ha": 4, "start_moisture_pct": 14},
+            {"name": "f1", "crop": "dear", "area_ha": 2, "start_moisture_pct": 14},
         ],
         machines=[{"name": "m0", "ha_per_hour": 1, "start": "f0"}],
         travel_hours=[[0, 2, 2], [2, 0, 2], [2, 2, 0]],
@@ -73,6 +73,17 @@ def test_value_has_one_number_per_field_and_hour():
     value = field_values(weather, moisture, params)
     assert value.shape == weather["rain_mm"].shape[1:]
     assert (value >= 0).all()
+
+
+def test_drying_cost_follows_camgrain_bands():
+    params = demo_params()
+    params["fields"] = [{"name": "f0", "crop": "free"}, {"name": "f1", "crop": "dear"}]
+    params["crops"] = {"free": {"price_gbp_per_t": 0}, "dear": {"price_gbp_per_t": 200}}
+    moisture = np.array([[[14.0, 15.0, 15.1, 15.5, 15.6, 16.0]] * 2])  # [member, field, hour]
+    cost = drying_cost_gbp_per_t(moisture, params)
+    assert cost[0, 0] == pytest.approx([0, 0, 2, 2, 4, 4])  # price 0 leaves only the charge
+    # at 16%: £4 charge + 2 points x 1.25% of a £200 tonne = £5 of weight lost
+    assert cost[0, 1, -1] == pytest.approx(9)
 
 
 def test_simulator_counts_driving_and_harvesting():

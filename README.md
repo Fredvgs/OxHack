@@ -60,6 +60,7 @@ same and you can rewrite any piece.
 |---|---|
 | `params.yaml` | every number: fields, machines, crop prices, thresholds, timings |
 | `run.py` | runs everything, prints results, plots them |
+| `compare.py` | runs every `plan_*` planner, plots each one, then one window comparing them |
 | `harvest/` | the pipeline: `forecast.py`, `value.py`, `planner.py`, `simulate.py` |
 | `data/` | the forecast CSV, its format, and a script to download a fresh one |
 | `tests/` | `uv run pytest` |

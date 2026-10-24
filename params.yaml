@@ -102,3 +102,7 @@ moisture_demo:
 forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv
 forecast_hours: 127                   # all the 9 km model gives from forecast_start (~144 h past its run)
 forecast_model: ecmwf_ifs_europe_ensemble  # ECMWF IFS native 9 km ensemble, 51 members
+
+#Past weather download (only used by data/download_past_weather.py)
+past_weather_days: 21                 # whole days before forecast_start
+past_weather_model: ecmwf_ifs         # same 9 km grid as forecast_model; the ensemble keeps no past data

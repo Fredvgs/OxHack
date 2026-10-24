@@ -45,3 +45,26 @@ uv run python data/download_forecast.py
 
 This overwrites `forecast.csv` using the fields' `lat`/`lon` and the `forecast_*` settings in
 `params.yaml`.
+
+## Past weather (needs internet)
+
+```bash
+uv run python data/download_past_weather.py                         # past_weather_days before forecast_start
+uv run python data/download_past_weather.py 2026-10-01 2026-10-20   # your own dates, inclusive
+```
+
+Writes `past_weather.csv`: one row per hour and field, the weather that already happened (one best
+estimate, so no `member` column). It comes from the `past_weather_model` in `params.yaml`, which
+uses the same 9 km grid as the forecast. The ensemble API keeps no past data.
+
+| column | meaning | unit |
+|---|---|---|
+| `time` | UTC hour, e.g. `2026-10-04T00:00` | |
+| `field` | field name, matching `name` in `params.yaml` | |
+| `temp_c` | air temperature at 2 m | °C |
+| `humidity_pct` | relative humidity at 2 m | % |
+| `rain_mm` | rain during that hour | mm |
+
+Dates that aren't available are cut off with a warning, and the script stops if nothing is left.
+Open-Meteo has about 3 months back to about 2 weeks ahead, but `ecmwf_ifs` only keeps about the
+last 6 weeks.

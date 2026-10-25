@@ -17,6 +17,7 @@ past_weather_days: 21        # days of past weather before forecast_start
 rollout_start: "2024-06-09"
 rollout_end: "2024-09-10"    # inclusive
 past_forecast_dataset: ecmwf-ifs-ens-forecast-15-day-0-25-degree  # dynamical.org, 00 UTC runs
+past_forecast_grid_deg: 0.25 # its grid: fields in the same grid square share a forecast
 forecast_delay_hours: 8      # the 00 UTC run is published around 08 UTC
 forecast_run_every_hours: 24
 magnus_a: 17.625             # dew point to humidity (Alduchov & Eskridge 1996)

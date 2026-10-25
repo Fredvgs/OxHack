@@ -85,7 +85,7 @@ def tiny_farm():
             {"name": "f0", "crop": "cheap", "area_ha": 4},
             {"name": "f1", "crop": "dear", "area_ha": 2},
         ],
-        machines=[{"name": "m0", "ha_per_hour": 1, "start": "f0"}],
+        machines=[{"name": "m0", "ha_per_hour": 1, "start": "f0", "fuel_tank_litres": 500}],
         travel_hours=[[0, 2, 2], [2, 0, 2], [2, 2, 0]],
     )
     start_every_crop_at(params, 14)
@@ -127,7 +127,7 @@ def rain_farm():
             {"name": "f0", "crop": "grain", "area_ha": 1},
             {"name": "f1", "crop": "grain", "area_ha": 1},
         ],
-        machines=[{"name": "m0", "ha_per_hour": 1, "start": "depot"}],
+        machines=[{"name": "m0", "ha_per_hour": 1, "start": "depot", "fuel_tank_litres": 500}],
         travel_hours=np.zeros((3, 3)).tolist(),
     )
     start_every_crop_at(params, 16)
@@ -173,7 +173,7 @@ def one_combine_farm(n_fields, area_ha, start):
     params = demo_params()
     params.update(
         fields=[{"name": f"f{f}", "crop": "wheat", "area_ha": area_ha[f]} for f in range(n_fields)],
-        machines=[{"name": "m0", "ha_per_hour": 1, "start": start}],
+        machines=[{"name": "m0", "ha_per_hour": 1, "start": start, "fuel_tank_litres": 500}],
         travel_hours=(1 - np.eye(n_fields + 1)).tolist(),
         idle_in_field_gbp_per_hour=20,
         drive_gbp_per_hour=10,
@@ -378,6 +378,62 @@ def test_simulator_lets_machines_go_to_the_depot():
     result = run_season(weather, params, go_to_depot)
     assert result["total_gbp"] == 0
     assert (result["harvesting"] == -1).all()
+
+
+def test_fuel_tank_burns_the_diesel_running_costs_charge_for():
+    """Drive to field 1 for 2 hours (20 l each), then cut 1 ha in each of 2 hours (10 l each)."""
+    params, weather = tiny_farm()
+    round_running_costs(params)
+    result = run_season(weather, params, drive_to_field_1)
+    assert result["fuel_litres"][0] == pytest.approx([480, 460, 450, 440])
+    burned_litres = 500 - result["fuel_litres"][0, -1]  # diesel is £1 a litre here
+    assert burned_litres == pytest.approx(result["cost_breakdown_gbp"]["diesel"])
+
+
+def test_low_fuel_sends_the_combine_home_to_refuel():
+    """A 60 l tank, no reserve, 1 hour drives (20 l), 10 l per ha cut. After 4 hours of cutting
+    20 l is left: not enough for another hour (10 l) and the drive home (20 l), so the combine
+    goes home though the plan says stay. At the depot it waits until it has enough to get back,
+    cut an hour and get home again (50 l), then carries on with the plan."""
+    params, _ = tiny_farm()
+    round_running_costs(params)
+    n_hours = 8
+    params.update(
+        season_hours=n_hours,
+        plan_hours=n_hours,
+        sensor_every_hours=n_hours,
+        forecast_every_hours=n_hours,
+        travel_hours=(1 - np.eye(3)).tolist(),
+        fuel_reserve_pct=0,
+        depot_refuel_litres_per_hour=100,
+    )
+    params["machines"][0]["fuel_tank_litres"] = 60
+    params["fields"][0]["area_ha"] = 8
+    weather = {  # [member, field, hour]
+        "rain_mm": np.zeros((2, 2, n_hours)),
+        "humidity_pct": np.full((2, 2, n_hours), 60.0),
+    }
+    result = run_season(weather, params, stay_on_field_0)
+    depot = 2
+    assert result["fuel_litres"][0] == pytest.approx([50, 40, 30, 20, 0, 60, 40, 30])
+    assert result["place"][0].tolist() == [0, 0, 0, 0, depot, depot, 0, 0]
+    assert result["harvesting"][0].tolist() == [0, 0, 0, 0, WAIT, WAIT, WAIT, 0]
+    assert result["total_gbp"] == pytest.approx(5 * 50)
+
+
+def test_planners_see_the_fuel_left_in_each_tank():
+    """state["fuel_litres"] is the tanks' telemetry, read fresh at every replan."""
+    params, weather = tiny_farm()
+    round_running_costs(params)
+    params.update(sensor_every_hours=2, forecast_every_hours=2)
+    seen = []  # state["fuel_litres"] at each replan
+
+    def stay_and_record_fuel(value, state, params):
+        seen.append(state["fuel_litres"].tolist())
+        return stay_on_field_0(value, state, params)
+
+    run_season(weather, params, stay_and_record_fuel)
+    assert seen == [[500], [480]]  # full at the start, then 2 ha cut at 10 l/ha
 
 
 def test_planner_finds_the_best_answer_on_the_tiny_farm():
@@ -639,3 +695,8 @@ def test_demo_runs_end_to_end():
     assert result["harvesting"].shape == (len(params["machines"]), params["season_hours"])
     assert result["running_cost_gbp"].shape == result["harvesting"].shape
     assert len(result["plans"]) == params["season_hours"] // params["sensor_every_hours"]
+    tank = np.array([machine["fuel_tank_litres"] for machine in params["machines"]])
+    reserve = tank * params["fuel_reserve_pct"] / 100
+    assert result["fuel_litres"].shape == result["harvesting"].shape
+    assert (result["fuel_litres"].min(axis=1) >= reserve).all()  # home before the reserve
+    assert (result["fuel_litres"].max(axis=1) <= tank).all()

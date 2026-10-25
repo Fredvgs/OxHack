@@ -103,9 +103,12 @@ same inputs and outputs:
 | in | `state["remaining_ha"]` | `[F]` | hectares still standing in each field |
 | in | `state["machine_at"]` | `[K]` int | where each machine is: field index `0..F-1`, or `F` = depot |
 | in | `state["value_by_member"]` | `[M, F, H]` | optional: £/ha in each forecast member (`value` is their average). `simulate.py` passes it; only `plan_mpc` uses it |
+| in | `state["fuel_litres"]` | `[K]` | optional: diesel left in each combine's tank, telemetry from the simulator (tank sizes: `fuel_tank_litres` under `machines`). `simulate.py` passes it; no planner uses it yet |
 | out | `schedule` | `[K, H]` int | field index each machine should work on each hour, `F` = go to the depot, or `-1` = wait where it is |
 
-The planner only says where machines should be. Driving time and harvesting happen in the simulator.
+The planner only says where machines should be. Driving time, harvesting and fuel happen in the
+simulator. The planners don't plan refuelling yet: the simulator sends a combine home when its tank
+runs low, so `follow_plan` (`common.py`) can differ from what really happens.
 
 ## 4. `simulate.py`: the replanning loop that ties everything together
 
@@ -132,6 +135,7 @@ Two ways in, with the same result:
 | out | `result["harvesting"]` | `[K, H]` int | field each machine harvested each hour, `-1` = driving or waiting |
 | out | `result["place"]` | `[K, H]` int | where each machine is, or is driving to: field index, `F` = depot |
 | out | `result["driving"]` | `[K, H]` bool | True while the machine is on the road |
+| out | `result["fuel_litres"]` | `[K, H]` | diesel left in each tank at the end of each hour |
 | out | `result["remaining_ha"]` | `[F]` | hectares left standing at the end |
 | out | `result["plans"]` | list | one per replan: `{"hour", "value" [F, H], "schedule" [K, H]}` |
 
@@ -143,9 +147,17 @@ What it does:
 4. Every hour, each machine follows the schedule:
    - a new field (or the depot) means driving there first (`travel_hours`, rounded up to whole
      hours); a machine already driving finishes the trip before it follows a new plan;
-   - at the depot it does nothing;
+   - at the depot it refuels (`depot_refuel_litres_per_hour`, up to `fuel_tank_litres`);
    - at its field it cuts `ha_per_hour`, only if the true value that hour is above 0, until the field is empty;
    - money = hectares cut × the true £/ha.
+   - Fuel, a layer above the planners: every combine starts with a full tank and burns the same
+     litres the running costs charge for (`cutting_diesel_litres_per_ha`,
+     `road_diesel_litres_per_hour`; none while waiting, engine off). Each hour it isn't on the
+     road, **`must_refuel(fuel_litres, here, going_to, machine, travel, params)`** checks the tank
+     covers the trip the plan asks for, an hour of cutting and the drive home with
+     `fuel_reserve_pct` of the tank left. If not, the combine goes to the depot whatever the plan
+     says, and stays until it has enough. So no tank drops below the reserve. The fuel left is
+     passed to the planner as `state["fuel_litres"]` at every replan.
 5. At the end it works out the running costs from what each machine did each hour, with
    `running_costs` in `params.yaml` (UK numbers, with sources). These are the farm's real costs,
    not the planners' own `idle_in_field_gbp_per_hour` and `drive_gbp_per_hour`, so every planner is
@@ -156,7 +168,7 @@ What it does:
    | cutting | diesel per ha cut + operator + repairs | £35/ha at 2.5 ha/h |
    | driving | diesel per hour + operator + road escort + repairs | £95/h |
    | waiting in a field | operator on paid standby (engine off) | £19/h |
-   | at the depot | nothing: the operator is stood down | £0 |
+   | at the depot | nothing: the operator is stood down (the diesel pumped in was paid for as it burned) | £0 |
 
 Two helpers, both `[machine, hour]` in and out:
 

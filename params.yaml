@@ -34,10 +34,13 @@ fields:
   - {name: lodge_field,   crop: wheat,  area_ha: 30, lat: 51.7224, lon: -1.0987}
   - {name: great_leys,    crop: osr,    area_ha: 25, lat: 51.7255, lon: -1.1010}
 
-machines:  # start: depot or a field name
-  - {name: combine_a, ha_per_hour: 3.0, start: depot}
-  - {name: combine_b, ha_per_hour: 2.5, start: depot}
-  - {name: combine_c, ha_per_hour: 2.0, start: depot}
+# start: depot or a field name. Every combine starts with a full tank. fuel_tank_litres from
+# Ritchie Specs: Claas Tucano 440/450 ~650 l, Tucano 320/430 ~500 l (132 US gal). At
+# cutting_diesel_litres_per_ha that is 13-17 hours of cutting: about a day's work per tank.
+machines:
+  - {name: combine_a, ha_per_hour: 3.0, start: depot, fuel_tank_litres: 650}
+  - {name: combine_b, ha_per_hour: 2.5, start: depot, fuel_tank_litres: 500}
+  - {name: combine_c, ha_per_hour: 2.0, start: depot, fuel_tank_litres: 500}
 
 # Fields in the order above, then the depot. Rounded up to whole hours.
 travel_hours:
@@ -93,6 +96,12 @@ running_costs:
   operator_gbp_per_hour: 19            # ~£15/h pay plus employer NI and holiday pay
   road_escort_gbp_per_hour: 25         # required over 3.5 m wide; pay plus their vehicle
   repairs_gbp_per_engine_hour: 31      # 23% of a £400k list price over 3,000 h (Calcante et al. 2013)
+
+# Fuel (harvest/simulate.py). Each combine's tank burns the litres above (per ha cut, per hour on
+# the road; nothing while waiting, engine off) and is filled only at the depot. The simulator sends
+# a combine home when one more hour of cutting would leave too little to get back.
+depot_refuel_litres_per_hour: 2400   # 40 l/min, the low end of farm tank pumps (40-70 l/min rated)
+fuel_reserve_pct: 10                 # of the tank, still in it on reaching the depot. Our choice
 
 # Planner costs: rough numbers the planners steer by. Scoring uses running_costs.
 idle_in_field_gbp_per_hour:  19

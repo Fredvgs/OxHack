@@ -6,7 +6,7 @@ time_zone: Europe/London      # times on screen are UK time (params.yaml forecas
 
 # Map (webapp/data/demo_farm.geojson holds the field outlines and the yard)
 map_tiles_url: https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}
-map_attribution: Imagery © Esri, Maxar, Earthstar Geographics · Fields © OpenStreetMap contributors
+map_attribution: Imagery © Esri, Maxar, Earthstar Geographics · Fields traced from it, land use © OpenStreetMap contributors
 pass_width_m: 12              # distance between a combine's passes up and down a field (header width)
 combine_gap_m: 30             # how far apart along the passes two combines in the same field are drawn
 yard_gap_m: 60                # how far apart combines park at the yard, in a row south-east of it

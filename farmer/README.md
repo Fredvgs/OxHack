@@ -16,8 +16,8 @@ Runs next to the demo (port 8000). Restart the server after changing Python file
 | Page | What it shows |
 |---|---|
 | **Home** (`index.html`) | The title, the slogan and **Log in**, which opens the dashboard on the Map (no account check), next to b-roll of the harvest: three aerial clips of machines at work, no people in shot, taking turns, each with its credit (`static/media/CREDITS.md`) |
-| **Map** (`map.html`) | Satellite map, fields filled by status, combines moving along their GPS tracks with a trail, a card per combine (readings, Send there / Back to yard / Call driver). Layer switches for live rain radar, rain forecast and wind, which zoom out to the area around the farm |
-| **Today** (`today.html`) | One big answer (Cut now / Wait a little / Not today), the real weather now and for the next 12 h, every field (Ready / Soon / Wait / Done, % cut, grain moisture, best time), every combine (what it's doing, next move) |
+| **Map** (`map.html`) | Satellite map, fields filled by status and outlined by crop (labels that would overlap hide until you zoom in), combines moving along their GPS tracks with a trail, a card per combine (readings, Send there / Back to yard / Call driver). Layer switches for live rain radar, rain forecast and wind, which zoom out to the area around the farm |
+| **Today** (`today.html`) | One big answer (Cut now / Wait a little / Not today), the real weather now and for the next 12 h, every field (Ready / Soon / Wait / Done, % cut, grain moisture, which combine the plan sends and when, best time), every combine (what it's doing, next move), and two charts of the plan in force on one hour axis: what each field is worth hour by hour (with where each combine is sent) and where each combine goes (done so far, then the plan) |
 | **Weather** (`weather.html`) | Forecast maps (rain, temperature, wind, clouds, radar) with a time slider and play, the next 7 days, and the next 48 h rated for harvesting (good / fair / poor) with the best window |
 | **Control** (`control.html`) | Each combine: fuel, grain tank, speed, switches (engine, header, auto-steer, lights), Send / Yard / Call. Plan switches and Update plan, alert switches, fields with Skip and priority |
 
@@ -51,3 +51,4 @@ browse. Click the red clock to go back to live. The weather always shows the rea
 | `static/js/common.js` | top bar, clock, alerts, toasts, pretend switches and readings |
 | `static/js/weather-data.js` | fetching the real weather, colour scales, drawing forecast maps |
 | `static/js/today.js`, `livemap.js`, `weather.js`, `control.js` | one per page |
+| `static/js/plan-charts.js` | Today's two plan charts, plain SVG in the demo's colours |

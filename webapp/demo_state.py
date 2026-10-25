@@ -87,6 +87,7 @@ def farm():
                 "short": labels[f].split()[0],  # "Culford Heath" -> "Culford", for tight spaces
                 "crop": field["crop"],
                 "area_ha": field["area_ha"],
+                "centre": [field["lat"], field["lon"]],  # the middle of its parcels, for labels
                 # [parcel][ring][corner][lat, lng]: Leaflet draws this as one MultiPolygon
                 "outline": [[latlng(parcel)] for parcel in outlines[f]],
                 "path": latlng(path),

@@ -1,7 +1,8 @@
 # harvest/: the pipeline
 
-Four files, one job each. To swap a piece out, write your own version of the function with the
-**same inputs and outputs** listed below, and everything else keeps working.
+Four files, one job each, plus `past_data.py` for replaying a past season. To swap a piece out,
+write your own version of the function with the **same inputs and outputs** listed below, and
+everything else keeps working.
 
 Letters used for array sizes (numbers are for the demo):
 
@@ -28,12 +29,12 @@ Reads the prediction data.
 | | | | `weather["humidity_pct"]`: `[M, F, H]` relative humidity, % |
 
 Optional third input **`moisture_path`**: `outputs/moisture_forecast.csv` (written by
-`moisture_forecast.py`). Adds `weather["moisture_pct"]`: `[M, F, H]` grain moisture (% wet basis,
-end of each hour), and the value function then uses it (see below). `run.py` and `compare.py`
+`scripts/moisture_forecast.py`). Adds `weather["moisture_pct"]`: `[M, F, H]` grain moisture
+(% wet basis, end of each hour), and the value function then uses it (see below). `run.py` and `compare.py`
 pass it. It must come from the same `forecast.csv`, or loading stops with an error.
 
 Also **`load_moisture(path, params)`**: reads just that CSV, out `[M, F, H]`, each field taking the
-column of its own crop. Feed it to `drying_cost_gbp_per_t` (see `plot_drying_cost.py`).
+column of its own crop. Feed it to `drying_cost_gbp_per_t` (see `scripts/plot_drying_cost.py`).
 
 ## 2. `value.py`: `field_values(weather, start_moisture, params, first_hour=0)`
 
@@ -50,8 +51,9 @@ Uses a helper, **`predict_moisture(start_moisture, weather, params)`**:
 in `[F]` and `[M, F, H]`, out `[M, F, H]` grain moisture (%) each hour.
 The simulator also uses it to get the "true" moisture that the sensor reads.
 With `weather["moisture_pct"]` it takes the moisture forecast, shifted so each member starts at
-the latest reading (keeping that member's hour-to-hour change). Without it, a simple model
-(dries with low humidity, wets with rain).
+the latest reading (keeping that member's hour-to-hour change). With `weather["temp_c"]` (the past
+forecasts of `replay.py`) it runs the grain moisture model of `moisture.py` from the reading.
+Without either, a simple model (dries with low humidity, wets with rain).
 
 And **`member_values(...)`**: same inputs, out `[M, F, H]`, the value in each member before
 averaging. `field_values` is its average over members.
@@ -85,40 +87,64 @@ same inputs and outputs:
 
 The planner only says where machines should be. Driving time and harvesting happen in the simulator.
 
-## 4. `simulate.py`: `run_season(weather, params, planner=plan)`
+## 4. `simulate.py`: the replanning loop that ties everything together
 
-The replanning loop that ties everything together.
+Two ways in, with the same result:
+
+- **`run_season(weather, params, planner=plan_urgencygreedy)`**: one forecast that never changes
+  (`run.py`, `compare.py`). It holds back forecast member `truth_member` as "the weather that
+  really happens"; the planner never sees it. The season is `season_hours` long.
+- **`run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy)`**: the forecast
+  is updated as the season goes (`replay.py`).
 
 | | Name | Type / shape | Meaning |
 |---|---|---|---|
-| in | `weather` | dict of `[M, F, H]` | from `load_forecast` |
-| in | `planner` | function | any function shaped like `plan` (default: `plan`) |
+| in | `weather` | dict of `[M, F, H]` | `run_season`: from `load_forecast` |
+| in | `truth` | dict of `[1, F, H]` | `run_with_forecasts`: the weather that really happens, one column per season hour (the season is this long) |
+| in | `get_forecast` | function | `run_with_forecasts`: `get_forecast(hour)` gives the newest forecast at that season hour, dict of `[M, F, H]` starting at that hour, at least `plan_hours + forecast_every_hours` long |
+| in | `planner` | function | any `plan_*` function (default: `plan_urgencygreedy`) |
 | out | `result["total_gbp"]` | float | money earned over the season |
 | out | `result["earned_gbp"]` | `[H]` | money earned each hour |
 | out | `result["harvesting"]` | `[K, H]` int | field each machine harvested each hour, `-1` = driving or waiting |
+| out | `result["place"]` | `[K, H]` int | where each machine is, or is driving to: field index, `F` = depot |
+| out | `result["driving"]` | `[K, H]` bool | True while the machine is on the road |
 | out | `result["remaining_ha"]` | `[F]` | hectares left standing at the end |
 | out | `result["plans"]` | list | one per replan: `{"hour", "value" [F, H], "schedule" [K, H]}` |
 
 What it does:
-1. Holds back forecast member `truth_member` as "the weather that really happens". The planner never sees it.
-2. Every `sensor_every_hours` it:
-   1. reads the true grain moisture (the "sensor reading");
-   2. calls `field_values` on the other members, starting from that reading;
-   3. calls the planner for a new schedule.
-3. Every hour, each machine follows the schedule:
+1. Every `sensor_every_hours` it reads the true grain moisture (the "sensor reading").
+2. Every `forecast_every_hours` it calls `get_forecast` for the newest forecast.
+3. After either one, it replans: `member_values` on the forecast from that hour, starting from the
+   latest reading, then the planner for a new schedule.
+4. Every hour, each machine follows the schedule:
    - a new field (or the depot) means driving there first (`travel_hours`, rounded up to whole
      hours); a machine already driving finishes the trip before it follows a new plan;
    - at the depot it does nothing;
    - at its field it cuts `ha_per_hour`, only if the true value that hour is above 0, until the field is empty;
    - money = hectares cut × the true £/ha.
 
+## 4b. `past_data.py`: the forecasts that were really issued, for `replay.py`
+
+| Function | In | Out |
+|---|---|---|
+| `open_archive(params)` | | the dynamical.org archive of ECMWF ensemble runs (`past_forecast_dataset`), opened lazily |
+| `season_dates(start, end, runs, params, now)` | first and last day | first hour and number of hours, cut (with a warning) to what the archives have and to the past |
+| `past_forecasts(archive, first_hour, params)` | | `(get_forecast, runs_used)`: `get_forecast` for `run_with_forecasts`, giving the newest run published by then (`forecast_delay_hours` after it starts) as `{"temp_c", "humidity_pct", "rain_mm"}` `[M, F, H]`; `runs_used` = `{season hour: run}` for each new run |
+| `past_weather(first_hour, n_hours, params)` | | the weather that happened, from Open-Meteo (`past_weather_model`): `{"temp_c", "humidity_pct", "rain_mm"}` `[1, F, H]` |
+| `load_run(archive, run, params)` | a run's start time | that run, hourly, `[M, F, H]` from its start; saved in `data/past_forecasts/` the first time |
+| `to_hourly(steps, step_hours, params)` | archive steps (every 3 or 6 h) `[M, F, step]` | `[M, F, H]`: temperature in straight lines, rain spread over each step, humidity from the dew point (Magnus) |
+
+In both, the rain at hour `h` is the rain that falls from `h` to `h + 1`, and it's all
+precipitation (rain, showers and snow), so the forecasts and the real weather match.
+
 ---
 
-## 5. `moisture.py`: grain moisture from temperature and humidity (not wired in yet)
+## 5. `moisture.py`: grain moisture from temperature and humidity
 
-A physically based alternative to `predict_moisture`, for wheat, barley and oilseed rape (`"osr"`).
-It reads `temp_c` and `humidity_pct` straight from the forecast CSV but doesn't plug into the
-pipeline yet (`load_forecast` doesn't load temperature). All constants, including each crop's
+A physically based alternative to the simple model in `predict_moisture`, for wheat, barley and
+oilseed rape (`"osr"`). `run.py` uses it through `outputs/moisture_forecast.csv` (made by
+`scripts/moisture_forecast.py`, since `load_forecast` doesn't load temperature);
+`predict_moisture` runs it directly when the forecast has temperature (`replay.py`). All constants, including each crop's
 starting moisture (`start_moisture_pct`, placeholders for now), are in `params.yaml` under
 `moisture_model`, with sources. To use the official ASABE D245.7 Henderson constants, replace
 `henderson_k/c/n` there.
@@ -136,11 +162,11 @@ Every hour: equilibrium moisture from modified Henderson (RH clipped to 0.05-0.9
 from Arrhenius, then `M = Me + (M - Me) * exp(-k * dt)` in dry basis (Lewis, one step at a time).
 
 Try it:
-- `uv run python moisture_forecast.py`: every crop on `data/forecast.csv`, saved to
+- `uv run python scripts/moisture_forecast.py`: every crop on `data/forecast.csv`, saved to
   `outputs/moisture_forecast.csv`
-- `uv run python plot_moisture.py [field]`: plot every crop on the forecast for one field
-- `uv run python plot_moisture_demo.py`: plot a week of made-up weather
-- `uv run python moisture_sensitivity.py`: Ea 30,000-55,000 J/mol, k_ref ±50%
+- `uv run python scripts/plot_moisture.py [field]`: plot every crop on the forecast for one field
+- `uv run python scripts/plot_moisture_demo.py`: plot a week of made-up weather
+- `uv run python scripts/moisture_sensitivity.py`: Ea 30,000-55,000 J/mol, k_ref ±50%
 
 **Known limitations**
 - Rain, dew, solar radiation, wind and crop maturity are not modelled yet. RH is used as measured.

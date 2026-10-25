@@ -1,8 +1,9 @@
 """Drying cost over the forecast for one field: moisture forecast CSV -> drying_cost_gbp_per_t.
 
 Moisture comes from outputs/moisture_forecast.csv; make it first with
-`uv run python moisture_forecast.py`.
-Run:  uv run python plot_drying_cost.py [field_name]   (default: the first field in params.yaml)
+`uv run python scripts/moisture_forecast.py`.
+Run:  uv run python scripts/plot_drying_cost.py [field_name]
+      (default: the first field in params.yaml)
 """
 
 import sys
@@ -12,10 +13,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 
-from harvest.forecast import load_moisture
-from harvest.value import drying_cost_gbp_per_t
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))  # so "harvest" and "run" import when run from scripts/
 
-ROOT = Path(__file__).parent
+from harvest.forecast import load_moisture  # noqa: E402
+from harvest.value import drying_cost_gbp_per_t  # noqa: E402
+
 MOISTURE_CSV = ROOT / "outputs" / "moisture_forecast.csv"
 OUTPUT = ROOT / "outputs" / "cost_curve.png"
 

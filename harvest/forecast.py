@@ -27,7 +27,7 @@ def load_forecast(path, params, moisture_path=None):
 
     path:          the forecast CSV file
     params:        settings from params.yaml (the field order comes from params["fields"])
-    moisture_path: outputs/moisture_forecast.csv (from moisture_forecast.py), or None
+    moisture_path: outputs/moisture_forecast.csv (from scripts/moisture_forecast.py), or None
     returns: {"rain_mm": [member, field, hour], "humidity_pct": [member, field, hour]},
              plus "moisture_pct": [member, field, hour] when moisture_path is given
     """
@@ -38,13 +38,14 @@ def load_forecast(path, params, moisture_path=None):
         # an old moisture CSV from a different forecast would silently give the wrong values
         if weather["moisture_pct"].shape != shape:
             raise ValueError(
-                f"{moisture_path} does not match {path}: rerun `uv run python moisture_forecast.py`"
+                f"{moisture_path} does not match {path}: "
+                "rerun `uv run python scripts/moisture_forecast.py`"
             )
     return weather
 
 
 def load_moisture(path, params):
-    """Read the grain moisture CSV written by moisture_forecast.py (outputs/moisture_forecast.csv).
+    """Read outputs/moisture_forecast.csv, the grain moisture made by scripts/moisture_forecast.py.
 
     The CSV has one column per crop ("wheat_moisture_pct", ...); every field gets the column of
     the crop growing on it.

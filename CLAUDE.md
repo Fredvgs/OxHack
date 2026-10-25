@@ -8,19 +8,22 @@ Forecast CSV → value function (£/ha per field per hour) → planner (which fi
 - Format: `uv run ruff format .`
 - Run: `uv run python run.py` (prints results and opens a matplotlib window)
 - Compare planners: `uv run python compare.py` (runs every `plan_*` in `harvest/planners/`)
+- Replay past dates with real past forecasts: `uv run python replay.py 2026-10-10 2026-10-25 [planner]` (needs internet the first time)
 - Fresh forecast: `uv run python data/download_forecast.py`
 
 ## Map
 - `params.yaml`: every number. `run.py`: runs everything, prints results and plots them. `compare.py`: same for every planner, plus a side-by-side window.
 - `harvest/forecast.py` → `value.py` → `planners/`, looped by `simulate.py`. **Inputs, outputs and array shapes of every function: `harvest/README.md`.**
+- `replay.py`: replays past dates; `harvest/past_data.py` fetches the past forecast runs (dynamical.org, saved in `data/past_forecasts/`) and the weather that happened (Open-Meteo).
+- `scripts/`: helper scripts run by hand (`uv run python scripts/<name>.py`): `moisture_forecast.py` makes `outputs/moisture_forecast.csv` for `run.py`; `plot_*.py` and `moisture_sensitivity.py` save charts to `outputs/`.
 - `data/forecast.csv`: prediction data, format in `data/README.md`. `tests/test_pipeline.py`: all tests.
 
 ## Ownership (fill in names)
 | Area | Files | Owner |
 |---|---|---|
-| Data + value function | `harvest/forecast.py`, `harvest/value.py`, `data/` | `<NAME>` |
+| Data + value function | `harvest/forecast.py`, `harvest/value.py`, `harvest/past_data.py`, `data/`, `scripts/` | `<NAME>` |
 | Planner | `harvest/planners/` | `<NAME>` |
-| Loop + results | `harvest/simulate.py`, `run.py`, `compare.py`, `tests/` | `<NAME>` |
+| Loop + results | `harvest/simulate.py`, `run.py`, `compare.py`, `replay.py`, `tests/` | `<NAME>` |
 
 `params.yaml` is shared: add keys freely, but tell the owner before changing someone else's.
 

@@ -46,6 +46,37 @@ uv run python data/download_forecast.py
 This overwrites `forecast.csv` using the fields' `lat`/`lon` and the `forecast_*` settings in
 `params.yaml`.
 
+## Past forecasts, for replaying a past season (needs internet the first time)
+
+```bash
+uv run python replay.py 2026-10-10 2026-10-25
+```
+
+`replay.py` uses the forecasts that were really issued: every 00 UTC run of the ECMWF ensemble
+(51 members, 0.25° grid) since 2024-04-01, from the
+[dynamical.org archive](https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/)
+(`past_forecast_dataset` in `params.yaml`, free, no account). A run can only be used
+`forecast_delay_hours` after it starts, when ECMWF publishes it. The weather that really happened
+comes from Open-Meteo's [historical forecast API](https://open-meteo.com/en/docs/historical-forecast-api)
+(`past_weather_model`, the same 9 km model, hourly), up to the last full hour before now.
+
+Each run is downloaded the first time it's needed (about 5-10 s) and saved in
+`data/past_forecasts/<dataset>/<run start>.csv` (not in git), as the archive has it:
+
+| column | meaning | unit |
+|---|---|---|
+| `member` | 0 = main run, 1 to 50 = variations | |
+| `field` | field name, matching `name` in `params.yaml` | |
+| `hour` | hours since the run started: 0, 3, 6, ... 144, then every 6 to 360 | hours |
+| `lat`, `lon` | the field's position it was downloaded for (moving a field downloads it again) | ° |
+| `temp_c` | air temperature at 2 m | °C |
+| `dew_point_c` | dew point at 2 m (humidity comes from this and the temperature) | °C |
+| `precip_mm_per_s` | precipitation rate, average since the row before (empty at hour 0) | mm/s |
+
+`harvest/past_data.py` turns that into one value per hour: `temp_c`, `humidity_pct` and `rain_mm`
+(precipitation from hour `h` to `h + 1`). Delete the folder any time; runs are downloaded again
+when needed.
+
 ## Past weather (needs internet)
 
 ```bash

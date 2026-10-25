@@ -1,6 +1,7 @@
 """Grain moisture of every crop over the real forecast (data/forecast.csv), for one field.
 
-Run:  uv run python plot_moisture.py [field_name]   (default: the first field in params.yaml)
+Run:  uv run python scripts/plot_moisture.py [field_name]
+      (default: the first field in params.yaml)
 Lines are the average over forecast members; the shaded band runs from the lowest to the highest
 member. Starting moistures: "moisture_model" in params.yaml.
 """
@@ -11,10 +12,13 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import yaml
 
-from harvest.moisture import CONSTANTS, forecast_moisture
-from plot_moisture_demo import COLOURS, CROP_NAMES, MUTED, SURFACE, TEXT, style
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))  # so "harvest" and "run" import when run from scripts/
 
-ROOT = Path(__file__).parent
+from plot_moisture_demo import COLOURS, CROP_NAMES, MUTED, SURFACE, TEXT, style  # noqa: E402
+
+from harvest.moisture import CONSTANTS, forecast_moisture  # noqa: E402
+
 OUTPUT = ROOT / "outputs" / "moisture_forecast.png"
 
 

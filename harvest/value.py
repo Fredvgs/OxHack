@@ -5,6 +5,8 @@ Worked out separately for every forecast member, then averaged at the end.
 
 import numpy as np
 
+from harvest.moisture import simulate
+
 
 def start_moisture(weather, params):
     """Grain moisture (%) of every field at hour 0.
@@ -24,16 +26,32 @@ def predict_moisture(start_moisture, weather, params):
     """Grain moisture (%) every hour, starting from the latest reading.
 
     With weather["moisture_pct"] (the moisture forecast CSV, see harvest/moisture.py) each member
-    keeps its own hour-to-hour change but is shifted to start at the reading. Without it, a
-    simple model: dries with low humidity, wets with rain.
+    keeps its own hour-to-hour change but is shifted to start at the reading. With
+    weather["temp_c"] (the past forecasts in replay.py), the grain moisture model in moisture.py
+    runs from the reading. Without either, a simple model: dries with low humidity, wets with rain.
 
     start_moisture: [field]                        latest moisture reading, %
-    weather:        {name: [member, field, hour]}  "moisture_pct", or "rain_mm" and "humidity_pct"
+    weather:        {name: [member, field, hour]}  "moisture_pct", or "temp_c" and
+                                                   "humidity_pct", or "rain_mm" and "humidity_pct"
     returns:        [member, field, hour]          grain moisture, %
     """
     if "moisture_pct" in weather:
         moisture = weather["moisture_pct"]
         return moisture - moisture[:, :, :1] + start_moisture[None, :, None]
+
+    if "temp_c" in weather:
+        moisture = np.zeros(weather["temp_c"].shape)
+        constants = params["moisture_model"]
+        for f, field in enumerate(params["fields"]):
+            temp_c = weather["temp_c"][:, f]  # [member, hour]
+            rh = weather["humidity_pct"][:, f] / 100  # [member, hour] as a decimal
+            end_of_hour = simulate(
+                field["crop"], start_moisture[f], temp_c, rh, constants=constants
+            )
+            # the model gives the moisture at the END of each hour; we want the start
+            moisture[:, f, 0] = start_moisture[f]
+            moisture[:, f, 1:] = end_of_hour[:, :-1]
+        return moisture
 
     rain = weather["rain_mm"]
     humidity = weather["humidity_pct"]

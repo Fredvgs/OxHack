@@ -2,10 +2,11 @@
 # Units are in the names: _gbp = £, _ha = hectares, _hours, _pct = %, _mm = millimetres.
 
 #Simulation
-season_hours: 126       # how many hours we simulate, must fit in forecast_hours (126 = 21 replans)
+season_hours: 126       # run.py: how many hours we simulate, must fit in forecast_hours (126 = 21 replans)
 plan_hours: 126          # how far ahead each plan looks (must be >= sensor_every_hours)
-sensor_every_hours: 6    # a new moisture reading arrives this often, recall forecast and replan at this interval
-truth_member: 0          # forecast member that plays "the weather that really happened"
+sensor_every_hours: 6    # a new moisture reading arrives this often, and we replan
+forecast_every_hours: 6  # we ask for the newest forecast this often, and replan (replay.py: a new run comes once a day)
+truth_member: 0          # run.py: forecast member that plays "the weather that really happened"
 
 #Farm
 fields:   # lat/lon are only used to download a forecast.
@@ -101,7 +102,8 @@ moisture_model:
     osr:    {henderson_k: 5.0569e-4, henderson_c: 39.978,  henderson_n: 1.5714,
              k_ref_per_hour: 0.126,  t_ref_c: 40, ea_j_per_mol: 28470, start_moisture_pct: 8}
 
-# Synthetic weather and ranges for plot_moisture_demo.py and moisture_sensitivity.py (made-up numbers)
+# Synthetic weather and ranges (made-up numbers) for scripts/plot_moisture_demo.py and
+# scripts/moisture_sensitivity.py
 moisture_demo:
   days: 7
   mean_temp_c: 15
@@ -118,6 +120,16 @@ forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv
 forecast_hours: 127                   # all the 9 km model gives from forecast_start (~144 h past its run)
 forecast_model: ecmwf_ifs_europe_ensemble  # ECMWF IFS native 9 km ensemble, 51 members
 
-#Past weather download (only used by data/download_past_weather.py)
+#Past weather download (data/download_past_weather.py, and replay.py for the weather that happened)
 past_weather_days: 21                 # whole days before forecast_start
 past_weather_model: ecmwf_ifs         # same 9 km grid as forecast_model; the ensemble keeps no past data
+
+#Replay a past season (replay.py): the forecasts that were really issued, and the weather that followed
+replay_start: "2026-10-10"            # first day, from 00:00 UTC. `uv run python replay.py START END` overrides both
+replay_end: "2026-10-25"              # last day, included; cut back to the last hour that has happened
+# dynamical.org archive: ECMWF ensemble, 51 members, 0.25° grid, the 00 UTC run of every day since 2024-04-01
+past_forecast_dataset: ecmwf-ifs-ens-forecast-15-day-0-25-degree
+forecast_delay_hours: 8               # a run starting at 00 UTC reaches users from about 08:00 UTC (ECMWF dissemination)
+# The archive has dew point, not humidity. Magnus formula constants (Alduchov & Eskridge 1996)
+magnus_a: 17.625
+magnus_b_c: 243.04

@@ -1,17 +1,21 @@
 """Grain moisture over a week of made-up weather, for wheat, barley and oilseed rape.
 
-Run:  uv run python plot_moisture_demo.py   (weather settings: "moisture_demo" in params.yaml)
+Run:  uv run python scripts/plot_moisture_demo.py
+      (weather settings: "moisture_demo" in params.yaml)
 """
 
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 
-from harvest.moisture import CONSTANTS, db_to_wb, emc_db, simulate, synthetic_weather
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))  # so "harvest" and "run" import when run from scripts/
 
-ROOT = Path(__file__).parent
+from harvest.moisture import CONSTANTS, db_to_wb, emc_db, simulate, synthetic_weather  # noqa: E402
+
 OUTPUT = ROOT / "outputs" / "moisture_demo.png"
 
 CROP_NAMES = {"wheat": "Wheat", "barley": "Barley", "osr": "Oilseed rape"}

@@ -1,8 +1,8 @@
 """Plot the loaded forecast for each field: rain and humidity, every member plus the average.
 
-A quick look at the data the pipeline runs on. Not a test (pytest skips it), run it by hand:
+A quick look at the data the pipeline runs on. Run it by hand:
 
-uv run python tests/plot_forecast.py
+uv run python scripts/plot_forecast.py
 """
 
 import sys
@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import yaml
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))  # so "harvest" imports when run as a script from tests/
+sys.path.insert(0, str(ROOT))  # so "harvest" imports when run from scripts/
 
 from harvest.forecast import load_forecast  # noqa: E402
 

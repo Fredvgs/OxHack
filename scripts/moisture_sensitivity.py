@@ -3,19 +3,22 @@
 Varies Ea (activation energy) and k_ref (drying rate at 40 °C) one at a time, on the same week of
 made-up weather as plot_moisture_demo.py, and reports how far each run ends from the base run.
 
-Run:  uv run python moisture_sensitivity.py   (ranges: "moisture_demo" in params.yaml)
+Run:  uv run python scripts/moisture_sensitivity.py   (ranges: "moisture_demo" in params.yaml)
 """
 
 import copy
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 
-from harvest.moisture import CONSTANTS, simulate, synthetic_weather
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))  # so "harvest" and "run" import when run from scripts/
 
-ROOT = Path(__file__).parent
+from harvest.moisture import CONSTANTS, simulate, synthetic_weather  # noqa: E402
+
 OUTPUT = ROOT / "outputs" / "moisture_sensitivity.png"
 
 CROP_NAMES = {"wheat": "Wheat", "barley": "Barley", "osr": "Oilseed rape"}

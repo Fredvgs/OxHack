@@ -3,22 +3,26 @@
 The line is the average over forecast members, the band how much they disagree. Dashed lines:
 too wet to combine above max_harvest_moisture_pct, no drying charge below free_drying_up_to_pct.
 Moisture comes from outputs/moisture_forecast.csv; make it first with
-`uv run python moisture_forecast.py`.
-Run:  uv run python plot_field_moisture.py
+`uv run python scripts/moisture_forecast.py`.
+Run:  uv run python scripts/plot_field_moisture.py
 """
 
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 
-from harvest.forecast import load_moisture
-from plot_drying_cost import MUTED, SURFACE
-from plot_field_values import plot_per_field
-from run import MOISTURE_CSV
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))  # so "harvest" and "run" import when run from scripts/
 
-ROOT = Path(__file__).parent
+from plot_drying_cost import MUTED, SURFACE  # noqa: E402
+from plot_field_values import plot_per_field  # noqa: E402
+
+from harvest.forecast import load_moisture  # noqa: E402
+from run import MOISTURE_CSV  # noqa: E402
+
 OUTPUT = ROOT / "outputs" / "field_moisture.png"
 
 

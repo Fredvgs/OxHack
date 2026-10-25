@@ -14,7 +14,20 @@ uv run pytest
   - staying on field 0 earns £200, the best possible;
   - driving to field 1 earns £160, because 2 hours are lost to driving;
   - the planner finds the £200;
+- the simulator records the path (where each machine is, and when it's driving);
+- a new forecast mid-season makes it replan, and the machine follows the new plan;
+- with temperature in the forecast, grain moisture comes from the moisture model, starting at the reading;
 - the full demo runs end to end.
+
+`test_past_data.py` checks the replay data (`harvest/past_data.py`), with made-up data instead of
+downloads:
+
+- 3- and 6-hourly forecast steps become hours (temperature in straight lines, rain spread over each step);
+- humidity from the dew point matches the tables;
+- a run is only used once it's published, and an incomplete newest run falls back to the one before;
+- replay dates are cut, with a warning, to the forecast archive and to the past;
+- a saved run is read back without downloading, unless its field moved;
+- past weather gives each hour the rain that fell during it.
 
 `test_moisture.py` checks the grain moisture model (`harvest/moisture.py`):
 

@@ -7,7 +7,9 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import yaml
+from matplotlib.colors import ListedColormap
 
 from harvest.forecast import load_forecast
 from harvest.simulate import run_season
@@ -16,7 +18,7 @@ ROOT = Path(__file__).parent
 FORECAST_CSV = ROOT / "data" / "forecast.csv"
 MOISTURE_CSV = (
     ROOT / "outputs" / "moisture_forecast.csv"
-)  # make it: uv run python moisture_forecast.py
+)  # make it: uv run python scripts/moisture_forecast.py
 
 
 def main():
@@ -30,7 +32,7 @@ def main():
 
 def print_results(result, params):
     """Summary in the terminal."""
-    print(f"Replanned {len(result['plans'])} times over {params['season_hours']} hours")
+    print(f"Replanned {len(result['plans'])} times over {len(result['earned_gbp'])} hours")
     print(f"Earned: GBP {result['total_gbp']:,.0f}")
     print()
     print(f"{'field':<15} {'harvested ha':>12} {'left ha':>8}")
@@ -38,28 +40,45 @@ def print_results(result, params):
         print(f"{field['name']:<15} {field['area_ha'] - left:>12.1f} {left:>8.1f}")
 
 
-def plot_results(result, params):
-    """Three charts sharing the same hour axis."""
+def plot_results(result, params, start=None, marked_hours=None):
+    """Three charts sharing the same hour axis.
+
+    start:        Timestamp of hour 0, to label the axis with dates (replay.py), or None for hours
+    marked_hours: hours to mark with a dashed line, or None for every replan
+    """
     field_names = [field["name"] for field in params["fields"]]
     machine_names = [machine["name"] for machine in params["machines"]]
     n_fields = len(field_names)
+    n_hours = len(result["earned_gbp"])
     fig, (top, middle, bottom) = plt.subplots(3, 1, figsize=(10, 9), sharex=True)
 
     # 1. what the planner expected each field to be worth. Each plan is only followed until the
-    # next forecast arrives, so stitch together those first hours of every plan.
-    used = [plan["value"][:, : params["sensor_every_hours"]] for plan in result["plans"]]
-    value = np.concatenate(used, axis=1)[:, : params["season_hours"]]  # [field, hour] £/ha
-    image = top.imshow(value, aspect="auto", cmap="viridis")
+    # next replan, so stitch together those first hours of every plan.
+    plans = result["plans"]
+    ends = [plan["hour"] for plan in plans[1:]] + [n_hours]  # hour each plan stops being followed
+    used = [plan["value"][:, : end - plan["hour"]] for plan, end in zip(plans, ends)]
+    value = np.concatenate(used, axis=1)  # [field, hour] £/ha
+    # "nearest": one solid block per hour, not smoothed into its neighbours
+    image = top.imshow(value, aspect="auto", interpolation="nearest", cmap="viridis")
     top.set_yticks(range(n_fields), field_names)
     top.set_title("Expected £/ha if harvested (the plan being followed)")
     fig.colorbar(image, ax=top, label="£/ha")
 
-    # 2. which field each machine actually harvested (blank = driving or waiting)
+    # 2. the path each machine followed, drawn in three layers: the field it harvested, the field
+    # it waited in (faded), and driving (grey). Blank = at the depot
     harvested = np.ma.masked_equal(result["harvesting"], -1)
+    waiting = (result["harvesting"] == -1) & ~result["driving"] & (result["place"] < n_fields)
     colours = plt.get_cmap("tab10", n_fields)
-    image = middle.imshow(harvested, aspect="auto", cmap=colours, vmin=-0.5, vmax=n_fields - 0.5)
+    blocks = {"aspect": "auto", "interpolation": "nearest"}
+    field_colours = {"cmap": colours, "vmin": -0.5, "vmax": n_fields - 0.5, **blocks}
+    image = middle.imshow(harvested, **field_colours)
+    middle.imshow(np.ma.masked_where(~waiting, result["place"]), alpha=0.3, **field_colours)
+    driving = np.ma.masked_where(~result["driving"], result["place"])
+    middle.imshow(driving, cmap=ListedColormap(["dimgrey"]), **blocks)
     middle.set_yticks(range(len(machine_names)), machine_names)
-    middle.set_title("Field each machine harvested (blank = driving or waiting)")
+    middle.set_title(
+        "Path followed: solid = harvesting, faded = waiting, grey = driving, blank = depot"
+    )
     fig.colorbar(image, ax=middle, ticks=range(n_fields)).ax.set_yticklabels(field_names)
 
     # 3. money earned so far
@@ -70,16 +89,31 @@ def plot_results(result, params):
     # an empty colour bar slot, so all three charts are the same width and their hours line up
     fig.colorbar(image, ax=bottom).ax.set_visible(False)
 
+    if start is not None:
+        label_dates(bottom, start, n_hours)
     for ax in (top, middle, bottom):
-        mark_new_forecasts(ax, result)
+        mark_new_forecasts(ax, result, marked_hours)
     fig.tight_layout()
     return fig
 
 
-def mark_new_forecasts(ax, result):
-    """Dashed vertical line at every hour a new moisture reading arrived and we replanned."""
-    for plan in result["plans"][1:]:  # skip hour 0, the start of the chart
-        ax.axvline(plan["hour"] - 0.5, color="grey", linestyle="--", linewidth=0.8)
+def label_dates(ax, start, n_hours):
+    """Label the hour axis with the date at midnights (UTC), at most 8 of them so they fit."""
+    times = start + pd.to_timedelta(np.arange(n_hours), unit="h")
+    midnights = np.flatnonzero(times.hour == 0)
+    every = max(1, int(np.ceil(len(midnights) / 8)))  # label every this-many days
+    midnights = midnights[::every]
+    ax.set_xticks(midnights - 0.5, [f"{times[hour]:%d %b}" for hour in midnights])
+    ax.set_xlabel("date (UTC)")
+
+
+def mark_new_forecasts(ax, result, hours=None):
+    """Dashed vertical line at each of `hours`, or else at every hour we replanned."""
+    if hours is None:
+        hours = [plan["hour"] for plan in result["plans"]]
+    for hour in hours:
+        if hour > 0:  # skip hour 0, the start of the chart
+            ax.axvline(hour - 0.5, color="grey", linestyle="--", linewidth=0.8)
 
 
 if __name__ == "__main__":

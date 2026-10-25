@@ -3,13 +3,15 @@ name = "time-to-harvest"
 version = "0.1.0"
 description = "Time to Harvest: forecast -> value function -> planner -> replanning loop (OxHack26)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
+    "dynamical-catalog>=1.0.1",
     "matplotlib>=3.11.2",
     "numpy>=2.4.6",
     "pandas>=3.1.0",
     "pyyaml>=6.0.3",
     "requests>=2.34.2",
+    "xarray>=2026.9.0",
 ]
 
 [dependency-groups]
@@ -20,7 +22,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

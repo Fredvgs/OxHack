@@ -8,10 +8,16 @@ import yaml
 
 from harvest import planners
 from harvest.forecast import load_forecast, load_moisture
-from harvest.planners import plan_lagrangian, plan_mpc
+from harvest.planners import WAIT, plan_lagrangian, plan_mpc
 from harvest.planners.lagrangian import field_alone, machine_prices
-from harvest.simulate import run_season
-from harvest.value import drying_cost_gbp_per_t, field_values, member_values, start_moisture
+from harvest.simulate import run_season, run_with_forecasts
+from harvest.value import (
+    drying_cost_gbp_per_t,
+    field_values,
+    member_values,
+    predict_moisture,
+    start_moisture,
+)
 
 ROOT = Path(__file__).parent.parent
 MOISTURE_CSV = ROOT / "outputs" / "moisture_forecast.csv"
@@ -34,6 +40,7 @@ def tiny_farm():
         season_hours=4,
         plan_hours=4,
         sensor_every_hours=4,
+        forecast_every_hours=4,
         loss_pct_per_hour=0,
         drying_pct_per_hour=0,
         temp_start_moisture_pct=14,
@@ -70,6 +77,7 @@ def rain_farm():
         season_hours=3,
         plan_hours=3,
         sensor_every_hours=3,
+        forecast_every_hours=3,
         loss_pct_per_hour=0,
         drying_pct_per_hour=1,
         temp_start_moisture_pct=16,
@@ -182,6 +190,54 @@ def test_simulator_counts_driving_and_harvesting():
     params, weather = tiny_farm()
     assert run_season(weather, params, stay_on_field_0)["total_gbp"] == pytest.approx(200)
     assert run_season(weather, params, drive_to_field_1)["total_gbp"] == pytest.approx(160)
+
+
+def test_simulator_records_the_path_followed():
+    params, weather = tiny_farm()
+    result = run_season(weather, params, drive_to_field_1)
+    assert result["place"][0] == pytest.approx([1, 1, 1, 1])  # heading for field 1 from hour 0
+    assert result["driving"][0].tolist() == [True, True, False, False]  # 2 hours on the road
+    assert result["harvesting"][0] == pytest.approx([WAIT, WAIT, 1, 1])
+
+
+def test_simulator_replans_with_each_new_forecast():
+    """The weather stays dry, but the first forecast says it will rain on field 0, so the machine
+    waits. Two hours in, a new forecast says dry: it replans and harvests from then on."""
+    params, weather = tiny_farm()
+    params.update(sensor_every_hours=4, forecast_every_hours=2)
+    truth = {name: values[[0]] for name, values in weather.items()}  # [1, field, hour], all dry
+    rainy = {name: values.copy() for name, values in weather.items()}
+    rainy["rain_mm"][:, 0] = 5.0  # [member, field, hour]
+    asked_at = []
+
+    def get_forecast(hour):
+        asked_at.append(hour)
+        forecast = rainy if hour < 2 else weather
+        return {name: values[:, :, hour:] for name, values in forecast.items()}
+
+    def cut_field_0_if_worth_it(value, state, params):
+        return np.full((1, value.shape[1]), 0 if value[0, 0] > 0 else WAIT)
+
+    result = run_with_forecasts(truth, get_forecast, params, cut_field_0_if_worth_it)
+    assert asked_at == [0, 2]
+    assert [plan["hour"] for plan in result["plans"]] == [0, 2]
+    assert result["harvesting"][0] == pytest.approx([WAIT, WAIT, 0, 0])
+
+
+def test_moisture_model_runs_from_the_reading_when_there_is_temperature():
+    """Past forecasts (replay.py) have temperature, so grain moisture comes from moisture.py: it
+    starts at the reading and dries in warm, dry air."""
+    params = demo_params()
+    params["fields"] = [{"name": "f0", "crop": "wheat"}]
+    weather = {  # [member, field, hour]
+        "temp_c": np.full((2, 1, 5), 25.0),
+        "humidity_pct": np.full((2, 1, 5), 40.0),
+        "rain_mm": np.zeros((2, 1, 5)),
+    }
+    moisture = predict_moisture(np.array([18.0]), weather, params)
+    assert moisture.shape == (2, 1, 5)
+    assert moisture[:, 0, 0] == pytest.approx(18)
+    assert (np.diff(moisture[0, 0]) < 0).all()  # drier every hour
 
 
 def test_simulator_lets_machines_go_to_the_depot():
@@ -322,7 +378,7 @@ def test_mpc_never_puts_two_combines_on_one_field():
 def test_no_planner_earns_more_than_the_lagrangian_bound():
     """With a perfect forecast and a single plan, the bound must hold for every planner."""
     params = demo_params()
-    params.update(season_hours=48, plan_hours=48, sensor_every_hours=48)
+    params.update(season_hours=48, plan_hours=48, sensor_every_hours=48, forecast_every_hours=48)
     forecast = load_forecast(ROOT / "data" / "forecast.csv", params)
     # two copies of one member: the forecast the planners see is exactly the weather that happens
     weather = {name: np.repeat(values[[0], :, :48], 2, axis=0) for name, values in forecast.items()}

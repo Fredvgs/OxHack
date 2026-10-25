@@ -1,9 +1,14 @@
 """The replanning loop: step through the season hour by hour.
 
-Every `sensor_every_hours` a new grain moisture reading comes in. The value function is worked
-out again from that reading and the planner makes a new plan. Machines follow the latest plan.
-This file (not the planner) handles driving time and what actually gets harvested, using one
-forecast member as the "true" weather.
+Every `sensor_every_hours` a new grain moisture reading comes in, and every `forecast_every_hours`
+a newer forecast. Each time, the value function is worked out again and the planner makes a new
+plan. Machines follow the latest plan. This file (not the planner) handles driving time and what
+actually gets harvested, on the weather that really happens.
+
+Two ways in:
+- run_season: one fixed forecast; one of its members plays the weather that really happens.
+- run_with_forecasts: the real weather, and a function that gives the newest forecast at any hour
+  (replay.py uses it with the forecasts that were really issued, see harvest/past_data.py).
 """
 
 import numpy as np
@@ -13,29 +18,52 @@ from harvest.value import field_values, member_values, predict_moisture, start_m
 
 
 def run_season(weather, params, planner=plan_urgencygreedy):  # choose which planner to employ here
-    """Simulate the season.
+    """Simulate the season on one forecast that never changes.
 
     weather: {name: [member, field, hour]}  from forecast.load_forecast
     params:  settings from params.yaml
     planner: function(value, state, params) -> schedule [machine, hour]
              (field index, number of fields = go to the depot, WAIT = stay where it is)
+    returns: see run_with_forecasts
+    """
+    # one forecast member plays the weather that really happens; the planner sees the others
+    member = params["truth_member"]  # int
+    n_hours = params["season_hours"]  # int
+    # {name: [1, field, hour]}
+    truth = {name: values[[member], :, :n_hours] for name, values in weather.items()}
+    # {name: [member - 1, field, hour]}
+    forecast = {name: np.delete(values, member, axis=0) for name, values in weather.items()}
+
+    def get_forecast(hour):  # the same forecast every time, from that hour on
+        return {name: values[:, :, hour:] for name, values in forecast.items()}
+
+    return run_with_forecasts(truth, get_forecast, params, planner)
+
+
+def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
+    """Simulate a season in which the forecast gets updated as time goes on.
+
+    truth:        {name: [1, field, hour]}  the weather that really happens, one column per hour
+                  of the season (the season is as long as this)
+    get_forecast: function(hour) -> {name: [member, field, hour]}  the newest forecast at that
+                  season hour, its first column being that hour. Called every
+                  forecast_every_hours; it must cover at least plan_hours + forecast_every_hours
+    params:       settings from params.yaml
+    planner:      function(value, state, params) -> schedule [machine, hour]
     returns: {
         "total_gbp":    float            money earned
         "earned_gbp":   [hour]           money earned in each hour
         "harvesting":   [machine, hour]  field each machine harvested, WAIT (-1) if none
+        "place":        [machine, hour]  where each machine is, or is driving to: field index,
+                                         or number of fields = the depot
+        "driving":      [machine, hour]  True while the machine is on the road
         "remaining_ha": [field]          area left standing at the end
         "plans":        one per replan: {"hour", "value" [field, hour], "schedule" [machine, hour]}
     }
     """
     fields, machines = params["fields"], params["machines"]  # list of dicts: [field], [machine]
     names = [field["name"] for field in fields]  # [field] str
-    n_hours = params["season_hours"]  # int
-
-    # one forecast member plays the weather that really happens; the planner sees the others
-    member = params["truth_member"]  # int
-    truth = {name: values[[member]] for name, values in weather.items()}  # {name: [1, field, hour]}
-    # {name: [member - 1, field, hour]}
-    forecast = {name: np.delete(values, member, axis=0) for name, values in weather.items()}
+    n_hours = truth["rain_mm"].shape[2]  # int
 
     first_moisture = start_moisture(truth, params)  # [field] %
     true_moisture = predict_moisture(first_moisture, truth, params)[0]  # [field, hour]
@@ -49,16 +77,25 @@ def run_season(weather, params, planner=plan_urgencygreedy):  # choose which pla
     arrives_at = np.zeros(len(machines), dtype=int)  # [machine] hour a driving machine gets there
     earned = np.zeros(n_hours)  # [hour] £
     harvesting = np.full((len(machines), n_hours), WAIT)  # [machine, hour] field index or WAIT
+    place = np.zeros((len(machines), n_hours), dtype=int)  # [machine, hour] field index or depot
+    driving = np.zeros((len(machines), n_hours), dtype=bool)  # [machine, hour]
     plans = []  # list of dicts, one per replan
 
     for hour in range(n_hours):
-        if hour % params["sensor_every_hours"] == 0:
-            # new sensor reading -> new field values -> new plan
+        new_reading = hour % params["sensor_every_hours"] == 0  # bool
+        new_forecast = hour % params["forecast_every_hours"] == 0  # bool
+        if new_reading:
             reading = true_moisture[:, hour]  # [field] %
-            end = hour + params["plan_hours"]  # int
-            # {name: [member - 1, field, plan_hour]}
-            upcoming = {name: values[:, :, hour:end] for name, values in forecast.items()}
-            # [member - 1, field, plan_hour] £/ha
+        if new_forecast:
+            forecast = get_forecast(hour)  # {name: [member, field, hour since forecast_hour]}
+            forecast_hour = hour  # int, season hour of the forecast's first column
+        if new_reading or new_forecast:
+            # new field values -> new plan. Between readings, it starts from the last reading
+            first = hour - forecast_hour  # int, the forecast column for this hour
+            end = first + params["plan_hours"]  # int
+            # {name: [member, field, plan_hour]}
+            upcoming = {name: values[:, :, first:end] for name, values in forecast.items()}
+            # [member, field, plan_hour] £/ha
             by_member = member_values(upcoming, reading, params, first_hour=hour)
             value = by_member.mean(axis=0)  # [field, plan_hour] £/ha, same as field_values
             state = {
@@ -82,11 +119,15 @@ def run_season(weather, params, planner=plan_urgencygreedy):  # choose which pla
                 remaining[target] -= ha
                 earned[hour] += ha * true_value[target, hour]
                 harvesting[m, hour] = target
+            place[m, hour] = machine_at[m]
+            driving[m, hour] = hour < arrives_at[m]
 
     return {
         "total_gbp": earned.sum(),
         "earned_gbp": earned,
         "harvesting": harvesting,
+        "place": place,
+        "driving": driving,
         "remaining_ha": remaining,
         "plans": plans,
     }

@@ -2,7 +2,7 @@
 
 The same simulated season as the demo control panel (`webapp/`), shown the way a farmer wants it:
 in the demo panel's look (one brand: its colours and fonts are read from `webapp/static`), few
-words, no algorithm in sight. Four pages, phone and desktop.
+words, no algorithm in sight. A home page, then four dashboard pages, phone and desktop.
 
 ```
 uv run --group web uvicorn farmer.server:app --port 8001    then open http://localhost:8001
@@ -15,8 +15,9 @@ Runs next to the demo (port 8000). Restart the server after changing Python file
 
 | Page | What it shows |
 |---|---|
-| **Today** (`index.html`) | One big answer (Cut now / Wait a little / Not today), the real weather now and for the next 12 h, every field (Ready / Soon / Wait / Done, % cut, grain moisture, best time), every combine (what it's doing, next move) |
+| **Home** (`index.html`) | The title, the slogan and **Log in**, which opens the dashboard on the Map (no account check), next to b-roll of the harvest: three aerial clips of machines at work, no people in shot, taking turns, each with its credit (`static/media/CREDITS.md`) |
 | **Map** (`map.html`) | Satellite map, fields filled by status, combines moving along their GPS tracks with a trail, a card per combine (readings, Send there / Back to yard / Call driver). Layer switches for live rain radar, rain forecast and wind, which zoom out to the area around the farm |
+| **Today** (`today.html`) | One big answer (Cut now / Wait a little / Not today), the real weather now and for the next 12 h, every field (Ready / Soon / Wait / Done, % cut, grain moisture, best time), every combine (what it's doing, next move) |
 | **Weather** (`weather.html`) | Forecast maps (rain, temperature, wind, clouds, radar) with a time slider and play, the next 7 days, and the next 48 h rated for harvesting (good / fair / poor) with the best window |
 | **Control** (`control.html`) | Each combine: fuel, grain tank, speed, switches (engine, header, auto-steer, lights), Send / Yard / Call. Plan switches and Update plan, alert switches, fields with Skip and priority |
 

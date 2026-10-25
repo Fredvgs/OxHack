@@ -3,49 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Today · Time to Harvest</title>
+  <title>Time to Harvest</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/brand/css/tokens.css">
   <link rel="stylesheet" href="css/farmer.css">
-  <script type="module" src="js/today.js"></script>
+  <script type="module" src="js/home.js"></script>
 </head>
 <body>
-  <header class="strip" id="topbar"></header>
-  <main class="page">
-    <section class="verdict" id="verdict"><h1>Loading…</h1></section>
-
-    <div class="columns">
-      <div>
-        <section class="section">
-          <div class="section-head"><h2>Fields</h2><span class="num muted" id="harvested"></span></div>
-          <table class="data">
-            <thead><tr><th>Field</th><th class="wide">Crop</th><th class="r wide">Area</th><th>Cut</th><th class="r">Moisture</th><th>Status</th><th>Best time</th></tr></thead>
-            <tbody id="fields"></tbody>
-          </table>
-        </section>
-
-        <section class="section">
-          <div class="section-head"><h2>Combines</h2><a class="num" href="map.html">Open map</a></div>
-          <table class="data">
-            <thead><tr><th></th><th>Now</th><th>Next</th></tr></thead>
-            <tbody id="combines"></tbody>
-          </table>
-        </section>
-
-        <div class="actions">
-          <button class="button" data-toast="Plan sent to the 3 drivers.">Send plan to drivers</button>
-          <button class="button secondary" data-toast="Drying store booked for tomorrow.">Book drying store</button>
-          <button class="button secondary" data-toast="Calling the yard…">Call yard</button>
-        </div>
-      </div>
-
-      <aside>
-        <section class="section">
-          <div class="section-head"><h2>Weather</h2><a class="num" href="weather.html">Full forecast</a></div>
-          <div id="now-weather"><p class="muted">Getting the forecast…</p></div>
-        </section>
-      </aside>
+  <main class="home">
+    <div class="intro">
+      <h1>Time to Harvest</h1>
+      <p class="slogan">Cut every field at its best hour.</p>
+      <a class="button" href="map.html">Log in</a>
     </div>
+
+    <!-- b-roll: one clip at a time, changing every few seconds, each from data-start (in seconds,
+         where the 8 s shown have machines only, no people). Credits: media/CREDITS.md -->
+    <figure class="broll">
+      <div class="reel" data-seconds="8">
+        <video muted loop playsinline preload="auto" poster="media/harvest-fleet.jpg" data-start="3"
+          data-caption="Two combines and a grain cart. Video: USDA, public domain">
+          <source src="media/harvest-fleet.webm" type="video/webm"></video>
+        <video muted loop playsinline preload="auto" poster="media/harvest-field.jpg" data-start="0.5"
+          data-caption="A combine working down a wheat field. Video: USDA, public domain">
+          <source src="media/harvest-field.webm" type="video/webm"></video>
+        <video muted loop playsinline preload="auto" poster="media/harvest-dust.jpg" data-start="10.5"
+          data-caption="Combines at work, dust behind them. Video: USDA, public domain">
+          <source src="media/harvest-dust.webm" type="video/webm"></video>
+      </div>
+      <figcaption id="broll-caption"></figcaption>
+    </figure>
   </main>
 </body>
 </html>

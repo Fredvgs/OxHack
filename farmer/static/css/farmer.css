@@ -97,6 +97,19 @@ select.button { background: var(--paper); color: var(--ink); border-color: var(-
 .toasts { position: fixed; left: 24px; bottom: 24px; display: grid; gap: 6px; z-index: 2000; }
 .toast { background: var(--ink); color: var(--paper); padding: 10px 14px; font-size: 13px; }
 
+/* ---------- Home: title, slogan, log in, and b-roll of the harvest ---------- */
+.home { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 6vw; align-items: center; padding: 6vh 8vw; }
+.home .intro { display: flex; flex-direction: column; align-items: flex-start; }
+.home h1 { font-size: clamp(44px, 6.5vw, 92px); letter-spacing: -0.01em; }
+.home .slogan { font-size: clamp(20px, 2.2vw, 28px); color: var(--ink-2); margin: 14px 0 36px; }
+.home .button { display: inline-flex; align-items: center; text-decoration: none; padding: 0 30px; min-height: 48px; font-size: 15px; }
+.broll { margin: 0; }
+.reel { position: relative; aspect-ratio: 16 / 9; background: var(--ink); border: 1px solid var(--rule); overflow: hidden; }
+.reel video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.9s; }
+.reel video.on { opacity: 1; }
+.broll figcaption { font: 12px var(--font-data); color: var(--ink-2); margin-top: 8px; min-height: 1.5em; }
+.strip a.home-link { text-decoration: none; }
+
 /* ---------- Map ---------- */
 .map-page { position: relative; height: calc(100vh - 47px); }
 .map-page #map { position: absolute; inset: 0; }
@@ -162,6 +175,7 @@ select.button { background: var(--paper); color: var(--ink); border-color: var(-
 .star.on { background: var(--straw); border-color: var(--straw); color: var(--ink); }
 
 @media (max-width: 900px) {
+  .home { grid-template-columns: 1fr; align-content: center; gap: 40px; }
   .columns, .settings { grid-template-columns: 1fr; }
   .panel.left { display: none; }
 }

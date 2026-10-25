@@ -92,7 +92,8 @@ export function cutShare(plan, field, f, time) {
   return 1 - now / field.area_ha;
 }
 
-// The passes driven once `share` of the field is cut: the path up to that distance.
+// The passes driven once `share` of the field is cut: the path up to that distance, one line per
+// parcel so the stubble doesn't jump across the hedges and woods between them.
 function pathUpTo(field, share) {
   const metres = share * field.path_m[field.path_m.length - 1];
   if (metres <= 0) return [];
@@ -101,7 +102,9 @@ function pathUpTo(field, share) {
   const step = field.path_m[i + 1] - field.path_m[i];
   const t = step > 0 ? Math.min(1, (metres - field.path_m[i]) / step) : 0;
   const [a, b] = [field.path[i], field.path[i + 1]];
-  return [...field.path.slice(0, i + 1), [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]];
+  const driven = [...field.path.slice(0, i + 1), [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]];
+  const starts = field.parcel_starts;
+  return starts.map((start, p) => driven.slice(start, starts[p + 1])).filter((line) => line.length > 1);
 }
 
 // How many screen pixels one pass (header width) covers at the current zoom.

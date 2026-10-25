@@ -52,15 +52,15 @@ export const shortTime = (label) => `${label.slice(0, 3)} ${label.slice(-5)}`;
 
 // ---------- top strip ----------
 const PAGES = [
-  ["index.html", "Today"],
-  ["map.html", "Map"],
+  ["map.html", "Map"], // first: Log in on the home page opens the map
+  ["today.html", "Today"],
   ["weather.html", "Weather"],
   ["control.html", "Control"],
 ];
 
 export function topbar(farm, page, clock) {
   $("#topbar").innerHTML = `
-    <span class="label">Time to Harvest</span>
+    <a class="label home-link" href="index.html" title="Home">Time to Harvest</a>
     <span class="farm">${farm.name}, ${farm.place}</span>
     <nav class="nav">${PAGES.map(([href, word]) => `<a href="${href}" class="${href === page ? "active" : ""}">${word}</a>`).join("")}</nav>
     <div class="right">

@@ -48,16 +48,18 @@ skip a field, combine unavailable until..., enter a meter reading), with a previ
 
 ## The demo farm
 
-`data/demo_farm.geojson` has one polygon per field and a point for the yard. Each feature has
-`"name"` (the field's name in `params.yaml`, which links them) and `"label"` (what the farmer sees).
-The outlines were drafted on Esri imagery near Oxford. To redraw them, open the file at
-[geojson.io](https://geojson.io), move the corners onto the hedgerows, keep the properties, and save
-it back. The model still uses `area_ha` and `travel_hours` from `params.yaml`, not the drawn shapes.
+`data/demo_farm.geojson` has one MultiPolygon per field and a point for the yard. A field is a
+block of real parcels (OpenStreetMap `landuse=farmland` around Elveden, Suffolk; their way ids are in
+`"osm_ways"`), listed in the order a combine works them. Each feature has `"name"` (the field's name
+in `params.yaml`, which links them) and `"label"` (what the farmer sees). To redraw them, open the
+file at [geojson.io](https://geojson.io), move the corners onto the hedgerows, keep the properties,
+and save it back. The model still uses `area_ha` and `travel_hours` from `params.yaml`, not the
+drawn shapes.
 
 ## API
 
-`GET /api/farm`: `fields` (label, crop, area, outline and passes as `[lat, lng]`), `yard`, `machines`,
-`map` settings.
+`GET /api/farm`: `fields` (label, crop, area, outline `[parcel][ring][corner][lat, lng]`, passes as
+`[lat, lng]` and `parcel_starts`, where each parcel's passes begin), `yard`, `machines`, `map` settings.
 
 `GET /api/plan`: for every hour: `labels`, `activity` and `place` `[machine][hour]`, `cards`
 `[hour][machine]`, `standing_ha` `[field][hour + 1]`, `earned_gbp` and `running_cost_gbp` `[hour]`,

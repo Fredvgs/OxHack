@@ -27,27 +27,40 @@ def season():
 def geometry():
     """Field outlines and the yard from the GeoJSON, in params.yaml field order.
 
-    returns: (labels [field] str, outlines [field] of [corner, 2] lon/lat, yard [2] lon/lat)
+    A field is one or more parcels (a MultiPolygon), in the order a combine works them.
+    returns: (labels [field] str, outlines [field] of [parcel] of [corner, 2] lon/lat,
+              yard [2] lon/lat)
     """
     params, _, _ = season()
     features = json.loads(FARM_GEOJSON.read_text(encoding="utf-8"))["features"]
     by_name = {feature["properties"]["name"]: feature for feature in features}
     fields = [by_name[field["name"]] for field in params["fields"]]
     labels = [feature["properties"]["label"] for feature in fields]
-    # GeoJSON repeats the first corner at the end; drop it
-    outlines = [np.array(feature["geometry"]["coordinates"][0][:-1]) for feature in fields]
+    # each parcel's outer ring; GeoJSON repeats the first corner at the end, so drop it
+    outlines = [
+        [np.array(parcel[0][:-1]) for parcel in feature["geometry"]["coordinates"]]
+        for feature in fields
+    ]
     yard = np.array(by_name["depot"]["geometry"]["coordinates"], dtype=float)
     return labels, outlines, yard
 
 
 @cache
-def field_paths():
-    """[field] of [point, 2] metres from the yard: the passes a combine drives in each field."""
+def parcel_paths():
+    """[field] of [parcel] of [point, 2] metres from the yard: the passes in each parcel."""
     params, demo, _ = season()
     _, outlines, yard = geometry()
     return [
-        tracks.passes(tracks.to_metres(outline, yard), demo["pass_width_m"]) for outline in outlines
+        [tracks.passes(tracks.to_metres(parcel, yard), demo["pass_width_m"]) for parcel in parcels]
+        for parcels in outlines
     ]
+
+
+@cache
+def field_paths():
+    """[field] of [point, 2] metres from the yard: the passes a combine drives in each field,
+    one parcel after another."""
+    return [np.concatenate(parcels) for parcels in parcel_paths()]
 
 
 def machine_label(machine):
@@ -66,16 +79,20 @@ def farm():
     fields = []
     for f, field in enumerate(params["fields"]):
         path = tracks.to_lonlat(field_paths()[f], yard)
+        parcel_lengths = [len(parcel) for parcel in parcel_paths()[f]]
         fields.append(
             {
                 "name": field["name"],
                 "label": labels[f],
-                "short": labels[f].split()[0],  # "Long Ground" -> "Long", for tight spaces
+                "short": labels[f].split()[0],  # "Culford Heath" -> "Culford", for tight spaces
                 "crop": field["crop"],
                 "area_ha": field["area_ha"],
-                "outline": latlng(outlines[f]),
+                # [parcel][ring][corner][lat, lng]: Leaflet draws this as one MultiPolygon
+                "outline": [[latlng(parcel)] for parcel in outlines[f]],
                 "path": latlng(path),
                 "path_m": np.round(tracks.distance_along(field_paths()[f]), 1).tolist(),
+                # where each parcel's passes start in path, so the drawn stubble can break there
+                "parcel_starts": np.cumsum([0] + parcel_lengths[:-1]).tolist(),
             }
         )
     machines = [

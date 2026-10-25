@@ -114,42 +114,69 @@ What it does:
 
 ---
 
-## 5. `moisture.py`: grain moisture from temperature and humidity (not wired in yet)
+## 5. `moisture.py`: grain moisture from temperature, humidity and rain
 
-A physically based alternative to `predict_moisture`, for wheat, barley and oilseed rape (`"osr"`).
-It reads `temp_c` and `humidity_pct` straight from the forecast CSV but doesn't plug into the
-pipeline yet (`load_forecast` doesn't load temperature). All constants, including each crop's
-starting moisture (`start_moisture_pct`, placeholders for now), are in `params.yaml` under
-`moisture_model`, with sources. To use the official ASABE D245.7 Henderson constants, replace
-`henderson_k/c/n` there.
+A physically based model of grain moisture for wheat, barley and oilseed rape (`"osr"`). It reads
+`temp_c`, `humidity_pct` and `rain_mm` straight from the forecast CSV. `moisture_forecast.py`
+saves the result to `outputs/moisture_forecast.csv`, which the pipeline reads through
+`load_forecast(..., moisture_path=...)`. All constants, including each crop's starting moisture
+(`start_moisture_pct`, placeholders for now), are in `params.yaml` under `moisture_model`, with
+sources. To use the official ASABE D245.7 Henderson constants, replace `henderson_k/c/n` there.
 
 | Function | In | Out |
 |---|---|---|
-| `simulate(crop, M0_wb_percent, T_c, RH, dt=1.0)` | start moisture % wb, `T_c` and `RH` (decimal) `[H]` or `[M, F, H]`, hour last | same shape, moisture % wb at the **end** of each step (`predict_moisture` gives the start) |
-| `forecast_moisture(path)` | the forecast CSV | the CSV as a table plus `wheat_moisture_pct`, `barley_moisture_pct`, `osr_moisture_pct` for every hour, member and field |
+| `simulate(crop, M0_wb_percent, T_c, RH, rain_mm, dt=1.0)` | start moisture % wb; `T_c` (°C), `RH` (decimal) and `rain_mm` (mm per step, required), `[H]` or `[M, F, H]`, hour last | same shape, moisture % wb at the **end** of each step (`predict_moisture` gives the start) |
+| `forecast_moisture(path)` | the forecast CSV (needs `temp_c`, `humidity_pct`, `rain_mm`) | the CSV as a table plus `wheat_moisture_pct`, `barley_moisture_pct`, `osr_moisture_pct` for every hour, member and field, rain rule included |
 | `emc_db(crop, T, RH)` | any shape, °C and decimal | equilibrium moisture, kg water / kg dry matter |
 | `k_of_T(crop, T)` | any shape, °C | drying constant, 1/hour |
 | `wb_to_db(m)`, `db_to_wb(m)` | moisture as a decimal | the other basis, decimal |
 
 Each takes an optional `constants=` dict (default: from `params.yaml`) so you can try other values.
-Every hour: equilibrium moisture from modified Henderson (RH clipped to 0.05-0.95), drying rate
-from Arrhenius, then `M = Me + (M - Me) * exp(-k * dt)` in dry basis (Lewis, one step at a time).
+
+- **Dry hour:** equilibrium moisture from modified Henderson (RH clipped to 0.05-0.95), drying rate
+  from Arrhenius, then `M = Me + (M - Me) * exp(-k * dt)` in dry basis (Lewis, one step at a time).
+- **Rain hour** (`rain_mm >= rain_threshold_mm` and `rain_mm > 0`; the threshold is 0.3 mm/h, the
+  project's own choice), every crop: the dry step is **replaced** by
+  `M = min(M + rain_rise_per_hour * rain_rise_scale * dt, rain_max_mc)`, i.e. +0.028 kg/kg dry
+  basis per rain hour at scale 1, capped at 0.52 kg/kg (about 34% wet basis). From Smith, Bailey
+  & Ingram (1981), eqns 6a and 6b. `rain_rise_scale` is per crop: 1.0 for wheat and barley (the
+  rule unchanged) and 1.0 for oilseed rape, an **assumption** by analogy with barley. 0 switches a
+  crop's rain response off (rain hours then take the dry step).
 
 Try it:
 - `uv run python moisture_forecast.py`: every crop on `data/forecast.csv`, saved to
   `outputs/moisture_forecast.csv`
 - `uv run python plot_moisture.py [field]`: plot every crop on the forecast for one field
-- `uv run python plot_moisture_demo.py`: plot a week of made-up weather
+- `uv run python plot_moisture_demo.py`: plot a week of made-up weather, with rain spells
 - `uv run python moisture_sensitivity.py`: Ea 30,000-55,000 J/mol, k_ref ±50%
+- `uv run python rain_sensitivity.py`: rain threshold 0 / 0.3 / 0.5 mm and oilseed rape
+  `rain_rise_scale` 0 / 0.75 / 1.0, on the forecast (values in `rain_sensitivity` in `params.yaml`)
 
 **Known limitations**
-- Rain, dew, solar radiation, wind and crop maturity are not modelled yet. RH is used as measured.
+- Dew, solar radiation, wind and crop maturity are not modelled.
 - The k values come from forced-air dryer tests (40-60 °C, ~6% RH), not standing crop, so field
   use at 0-30 °C is an extrapolation. The oilseed rape `k_ref` is a placeholder (copied from wheat).
   All rate constants should be calibrated against measured field moisture where available.
 - The same k is used for drying and wetting.
 - The EMC curve is the same for drying and wetting (no hysteresis).
 - The Henderson constants are our own fit to the PAMI tables, not the official ASABE D245.7 values.
+- Rain rule:
+  - It was fitted together with Smith et al.'s own k and EMC. Paired with this model's
+    Henderson/Arrhenius dry-hour constants it is **not validated**; in one comparison, grain
+    recovered from rain much faster here than in Smith et al.'s model.
+  - It gives moisture at the **end** of a rain period. Values during rain hours are not validated
+    predictions.
+  - It depends on how **long** it rains, not how much. The authors tried amount-based terms and
+    found no better fit.
+  - Smith et al.'s RMS error against field data was about 0.03-0.065 kg/kg (3-6.5 moisture points).
+  - It was fitted to rain-gauge readings, and the paper gives no threshold. Forecast rain is a
+    different kind of data. Every hour at or above `rain_threshold_mm` (0.3 mm/h, the project's
+    choice) counts as a full rain hour: 17% of hours in the current forecast, against 33% with
+    any rain at all.
+  - Oilseed rape: its rain rise is the barley rule applied by analogy, with no published source
+    for rapeseed (Sokhansanj, Singh & Wasserman 1984 is the intended source, not yet read). Its
+    cap `rain_max_mc` (0.52 kg/kg) comes from barley and has no rapeseed basis. Its `k_ref` is
+    still a placeholder, and how fast it recovers after rain depends on it.
 
 **References**
 - ASABE Standard D245.7, *Moisture Relationships of Plant-based Agricultural Products* (constants not accessed)
@@ -159,5 +186,11 @@ Try it:
 - Noroña et al., *Drying kinetics of wheat, barley and maize grain* (k and Ea for wheat and barley)
 - Rapeseed Ea: *Thin layer drying rate and loss of viability modelling for rapeseed (canola)*, and a
   later study giving 27.86 kJ/mol
+- Smith, E.A., Bailey, P.H. & Ingram, G.W. (1981), *Prediction of the field moisture content of
+  mature barley and wheat by commonly used drying equations*, J. agric. Engng Res. 26: 171-178
+  (rain rule)
+- Sokhansanj, S., Singh, D. & Wasserman, J. (1984), *Drying characteristics of wheat, barley and
+  canola subjected to repetitive wetting and drying cycles*, Trans. ASAE 27(3): 903-906 (not yet
+  read; the intended source for a real oilseed rape rain term)
 - Possible barley wetting data (not used yet): Montanuci et al. (2015), Heat Mass Transfer 51:
   363-372; Tagawa et al. (2003), Trans. ASAE 46(2): 361-366

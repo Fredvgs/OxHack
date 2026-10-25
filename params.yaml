@@ -71,13 +71,27 @@ mpc_drive_gbp_per_hour: 10            # fuel and wear while driving between plac
 mpc_terminal_hours: 24                # grain standing when the plan ends is worth its average value
 mpc_terminal_value_pct: 100           # over the plan's last this-many hours, times this %
 
-#Grain moisture model (harvest/moisture.py). Not wired into the pipeline yet.
+#Grain moisture model (harvest/moisture.py). The pipeline reads its output, outputs/moisture_forecast.csv.
 # Temperatures in °C, RH as a decimal (0.65 = 65%), moisture inside the model is dry basis (kg/kg).
 moisture_model:
   gas_constant_j_per_mol_k: 8.314
   kelvin_offset: 273.15
   rh_min: 0.05                        # RH is clipped to [rh_min, rh_max]: Henderson blows up as RH -> 1
   rh_max: 0.95                        # (and was only fitted for 35-85% RH, -2 to 28 °C)
+  # Rain rule: in a rain hour, REPLACE the drying step with a fixed rise, capped:
+  #   m_db = min(m_db + rain_rise_per_hour * rain_rise_scale * dt, rain_max_mc)  (dry hours unchanged)
+  #   Source: Smith, Bailey & Ingram (1981), J. agric. Engng Res. 26: 171-178, eqns 6a and 6b.
+  #   Fitted with their own k and EMC, so pairing it with the Henderson/Arrhenius values below is
+  #   NOT validated. It depends on how long it rains, not how much.
+  rain_rise_per_hour: 0.028           # kg/kg dry basis per rain hour. Eqn 6a; 95% CI ±0.003, fitted
+                                      # to 44 rain periods in Bedfordshire barley data (1951-53)
+  rain_max_mc: 0.52                   # kg/kg dry basis (about 34% wet basis). Eqn 6b; from one
+                                      # prolonged heavy-rain period
+  rain_threshold_mm: 0.3              # mm per hour. Chosen by the project owner. Not from Smith et
+                                      # al. (1981), who used rain-gauge readings and gave no
+                                      # threshold. Lies between 0.1 mm/h (lowest light-rain category
+                                      # in Yr's scale) and 0.5 mm/h. A rain hour is one with
+                                      # rain_mm >= threshold (and rain_mm > 0).
   crops:
     # Equilibrium moisture, modified Henderson: EMC_db% = (-ln(1 - RH) / (K (T + C)))^(1/N)
     #   Source: NOT the official ASABE D245.7 values (paywalled). K, C, N fitted by non-linear least
@@ -87,19 +101,29 @@ moisture_model:
     #   henderson_k/c/n here.
     # start_moisture_pct: grain moisture (% wet basis) at hour 0 of the forecast. PLACEHOLDERS for
     #   now, replace with a field reading when there is one.
+    # rain_rise_scale: multiplies rain_rise_per_hour for this crop. 0 switches the rain response off,
+    #   values between 0 and 1 scale it down. Wheat and barley: Smith, Bailey & Ingram (1981) eqn 6a,
+    #   applied unchanged (fitted to barley data).
     # Drying rate, Arrhenius: k = k_ref exp(-(Ea/R)(1/T_K - 1/T_ref_K)), in 1/hour (Lewis model)
     #   Source (wheat, barley): Noroña et al., "Drying kinetics of wheat, barley and maize grain":
     #   k_ref = slope of ln(MR) vs t at 40 °C (Table 1), Ea from their Arrhenius fit of Deff (Table 3).
     #   Forced-air dryer tests at 40-60 °C, ~6% RH, so 0-30 °C in the field is an extrapolation.
     wheat:  {henderson_k: 2.2846e-5, henderson_c: 55.990,  henderson_n: 2.2876,
-             k_ref_per_hour: 0.1255, t_ref_c: 40, ea_j_per_mol: 50630, start_moisture_pct: 10}
+             k_ref_per_hour: 0.1255, t_ref_c: 40, ea_j_per_mol: 50630, start_moisture_pct: 10,
+             rain_rise_scale: 1.0}  # Smith et al. (1981) eqn 6a, unchanged (fitted to barley)
     barley: {henderson_k: 2.2451e-5, henderson_c: 197.489, henderson_n: 2.0160,
-             k_ref_per_hour: 0.1653, t_ref_c: 40, ea_j_per_mol: 55890, start_moisture_pct: 10}
+             k_ref_per_hour: 0.1653, t_ref_c: 40, ea_j_per_mol: 55890, start_moisture_pct: 10,
+             rain_rise_scale: 1.0}  # Smith et al. (1981) eqn 6a, unchanged (fitted to barley)
     # oilseed rape (canola). k_ref_per_hour is a PLACEHOLDER: copied from wheat, no sourced value.
     #   Ea from rapeseed thin-layer drying studies ("Thin layer drying rate and loss of viability
     #   modelling for rapeseed (canola)"; a later study gives 27,860 J/mol).
+    #   rain_rise_scale: ASSUMPTION, no published source. Smith et al.'s rule, fitted to barley,
+    #   applied to rapeseed by analogy. Replace with data from Sokhansanj, Singh & Wasserman (1984),
+    #   Trans. ASAE 27(3): 903-906 when available. 0 switches the rain response off, values between
+    #   0 and 1 scale it down.
     osr:    {henderson_k: 5.0569e-4, henderson_c: 39.978,  henderson_n: 1.5714,
-             k_ref_per_hour: 0.126,  t_ref_c: 40, ea_j_per_mol: 28470, start_moisture_pct: 8}
+             k_ref_per_hour: 0.126,  t_ref_c: 40, ea_j_per_mol: 28470, start_moisture_pct: 8,
+             rain_rise_scale: 1.0}  # ASSUMPTION, see above
 
 # Synthetic weather and ranges for plot_moisture_demo.py and moisture_sensitivity.py (made-up numbers)
 moisture_demo:
@@ -109,9 +133,16 @@ moisture_demo:
   warmest_hour: 15                    # hour of day with the highest temperature and lowest RH
   mean_rh: 0.75
   rh_swing: 0.18                      # RH goes this far above and below the mean each day
+  rain_spells: [[60, 3], [110, 6]]    # [first hour, number of hours] of each spell of rain
+  rain_mm_per_hour: 1.0               # rain during those hours
   ea_range_j_per_mol: [30000, 55000]  # sensitivity: Ea values tried, evenly spaced...
   ea_steps: 6                         # ...this many of them
   k_ref_scales: [0.5, 1.5]            # sensitivity: k_ref multiplied by each of these (±50%)
+
+# Values tried by rain_sensitivity.py (on data/forecast.csv). params above are not changed by it.
+rain_sensitivity:
+  thresholds_mm: [0.0, 0.3, 0.5]      # rain_threshold_mm, every crop
+  osr_rain_rise_scales: [0, 0.75, 1.0]  # oilseed rape rain_rise_scale
 
 #Forecast download (only used by data/download_forecast.py)
 forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv

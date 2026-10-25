@@ -38,17 +38,17 @@ def style(ax, title, ylabel):
         ax.spines[side].set_color(GRID)
 
 
-def run_with(crop, key, value, demo, T_c, RH):
+def run_with(crop, key, value, T_c, RH, rain_mm):
     """Simulate one crop with a single constant replaced, e.g. key="ea_j_per_mol"."""
     constants = copy.deepcopy(CONSTANTS)
     constants["crops"][crop][key] = value
     start = constants["crops"][crop]["start_moisture_pct"]
-    return simulate(crop, start, T_c, RH, constants=constants)
+    return simulate(crop, start, T_c, RH, rain_mm, constants=constants)
 
 
 def main():
     demo = yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))["moisture_demo"]
-    T_c, RH = synthetic_weather(demo)
+    T_c, RH, rain_mm = synthetic_weather(demo)
     days = np.arange(len(T_c)) / 24
     ea_values = np.linspace(*demo["ea_range_j_per_mol"], demo["ea_steps"])
 
@@ -56,17 +56,17 @@ def main():
     print(f"{'crop':<14} {'change':<22} {'end %':>7} {'vs base':>8} {'biggest gap':>12}")
     for col, (crop, name) in enumerate(CROP_NAMES.items()):
         c = CONSTANTS["crops"][crop]
-        base = simulate(crop, c["start_moisture_pct"], T_c, RH)
+        base = simulate(crop, c["start_moisture_pct"], T_c, RH, rain_mm)
         print(f"{name:<14} {'base':<22} {base[-1]:7.2f}")
 
         runs = [
-            (f"Ea = {ea:,.0f} J/mol", run_with(crop, "ea_j_per_mol", ea, demo, T_c, RH))
+            (f"Ea = {ea:,.0f} J/mol", run_with(crop, "ea_j_per_mol", ea, T_c, RH, rain_mm))
             for ea in ea_values
         ]
         runs += [
             (
                 f"k_ref x {s:g}",
-                run_with(crop, "k_ref_per_hour", c["k_ref_per_hour"] * s, demo, T_c, RH),
+                run_with(crop, "k_ref_per_hour", c["k_ref_per_hour"] * s, T_c, RH, rain_mm),
             )
             for s in demo["k_ref_scales"]
         ]

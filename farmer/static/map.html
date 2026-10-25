@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Map · Time to Harvest</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/brand/css/tokens.css">
+  <link rel="stylesheet" href="css/farmer.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="js/livemap.js"></script>
+</head>
+<body>
+  <header class="strip" id="topbar"></header>
+  <main class="map-page">
+    <div id="map"></div>
+
+    <aside class="panel left">
+      <span class="label">Combines</span>
+      <div id="combine-list"></div>
+    </aside>
+
+    <aside class="panel right">
+      <span class="label">Layers</span>
+      <label class="switch"><span>Field status</span><input type="checkbox" id="layer-status" checked><span class="toggle"></span></label>
+      <label class="switch"><span>Tracks</span><input type="checkbox" id="layer-trails" checked><span class="toggle"></span></label>
+      <label class="switch"><span>Rain radar</span><input type="checkbox" id="layer-radar"><span class="toggle"></span></label>
+      <label class="switch"><span>Rain forecast</span><input type="checkbox" id="layer-rain"><span class="toggle"></span></label>
+      <label class="switch"><span>Wind</span><input type="checkbox" id="layer-wind"><span class="toggle"></span></label>
+      <div class="legend" id="layer-legend" style="margin-top:8px"></div>
+    </aside>
+
+    <div class="panel bottom">
+      <span><span class="lamp ready"></span>ready</span>
+      <span><span class="lamp soon"></span>soon</span>
+      <span><span class="lamp wait"></span>wait</span>
+      <span><span class="lamp done"></span>done</span>
+      <span class="muted" id="weather-note"></span>
+    </div>
+  </main>
+</body>
+</html>

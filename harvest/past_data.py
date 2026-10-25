@@ -8,8 +8,8 @@ Each run is downloaded the first time it's needed and saved in data/past_forecas
 only downloads once. The archive has a value every 3 hours (every 6 after 144 h); to_hourly()
 turns that into one value per hour.
 
-Past weather: Open-Meteo's archive of ECMWF's own 9 km forecasts, the first hours of each run
-stitched together, hourly: https://open-meteo.com/en/docs/historical-forecast-api
+Past weather: Open-Meteo's archive of past_weather_model's forecasts (Met Office UK 2 km), the
+first hours of each run stitched together, hourly: https://open-meteo.com/en/docs/historical-forecast-api
 Saved in data/replay_weather/ the first time, too.
 
 So a replay of dates that are over goes online only the first time.

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weather · Time to Harvest</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/brand/css/tokens.css">
+  <link rel="stylesheet" href="css/farmer.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
+  <script type="module" src="js/weather.js"></script>
+</head>
+<body>
+  <header class="strip" id="topbar"></header>
+  <main class="page">
+    <section class="verdict" id="verdict"><h1>Getting the forecast…</h1></section>
+
+    <div class="columns">
+      <div>
+        <section class="section">
+          <div class="tabs" id="layer-tabs">
+            <button class="tab active" data-layer="precipitation">Rain</button>
+            <button class="tab" data-layer="temperature_2m">Temperature</button>
+            <button class="tab" data-layer="wind_speed_10m">Wind</button>
+            <button class="tab" data-layer="cloud_cover">Cloud</button>
+            <button class="tab" data-layer="radar">Radar, last 2 h</button>
+          </div>
+          <div id="weather-map"></div>
+          <div class="timebar">
+            <button class="button small" id="play">Play</button>
+            <input type="range" id="hour" min="0" value="0" aria-label="Hour">
+            <span class="when" id="when"></span>
+            <span class="legend" id="legend"></span>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head"><h2>Next 48 hours for cutting</h2>
+            <span class="legend"><span class="lamp ready"></span>good <span class="lamp soon"></span>fair <span class="lamp wait"></span>poor</span></div>
+          <div class="windows" id="windows"></div>
+          <div class="window-days" id="window-days"></div>
+          <div id="hourly-chart" style="margin-top:14px"></div>
+        </section>
+      </div>
+
+      <aside>
+        <section class="section">
+          <div class="section-head"><h2>Now</h2><span class="label" id="place"></span></div>
+          <div id="now"></div>
+        </section>
+        <section class="section">
+          <div class="section-head"><h2>7 days</h2></div>
+          <table class="data">
+            <thead><tr><th>Day</th><th>Sky</th><th class="r">High</th><th class="r">Low</th><th class="r">Rain</th></tr></thead>
+            <tbody id="days"></tbody>
+          </table>
+        </section>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

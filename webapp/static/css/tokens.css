@@ -1,0 +1,35 @@
+/* Design tokens: the only colours and fonts the web app uses. Rules in webapp/DESIGN.md. */
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("../fonts/Newsreader.ttf") format("truetype");
+  font-weight: 200 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../fonts/IBMPlexMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../fonts/IBMPlexMono-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  --paper: #f3eee2; /* background, like an almanac page */
+  --ink: #1d1a15; /* body text */
+  --ink-2: #5a5347; /* secondary text */
+  --rule: #cdc3ae; /* 1px hairlines instead of cards */
+  --straw: #c99a2e; /* cut / ready: fills only, too light for text */
+  --soil: #6e5232; /* on the road */
+  --rain: #2f6690; /* rain, chance of rain */
+  --alarm: #a8321f; /* too wet to cut, value lost */
+
+  --font-text: "Newsreader", Georgia, serif;
+  --font-data: "IBM Plex Mono", ui-monospace, monospace;
+  --radius: 2px;
+}

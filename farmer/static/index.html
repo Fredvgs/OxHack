@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Today · Time to Harvest</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/brand/css/tokens.css">
+  <link rel="stylesheet" href="css/farmer.css">
+  <script type="module" src="js/today.js"></script>
+</head>
+<body>
+  <header class="strip" id="topbar"></header>
+  <main class="page">
+    <section class="verdict" id="verdict"><h1>Loading…</h1></section>
+
+    <div class="columns">
+      <div>
+        <section class="section">
+          <div class="section-head"><h2>Fields</h2><span class="num muted" id="harvested"></span></div>
+          <table class="data">
+            <thead><tr><th>Field</th><th class="wide">Crop</th><th class="r wide">Area</th><th>Cut</th><th class="r">Moisture</th><th>Status</th><th>Best time</th></tr></thead>
+            <tbody id="fields"></tbody>
+          </table>
+        </section>
+
+        <section class="section">
+          <div class="section-head"><h2>Combines</h2><a class="num" href="map.html">Open map</a></div>
+          <table class="data">
+            <thead><tr><th></th><th>Now</th><th>Next</th></tr></thead>
+            <tbody id="combines"></tbody>
+          </table>
+        </section>
+
+        <div class="actions">
+          <button class="button" data-toast="Plan sent to the 3 drivers.">Send plan to drivers</button>
+          <button class="button secondary" data-toast="Drying store booked for tomorrow.">Book drying store</button>
+          <button class="button secondary" data-toast="Calling the yard…">Call yard</button>
+        </div>
+      </div>
+
+      <aside>
+        <section class="section">
+          <div class="section-head"><h2>Weather</h2><a class="num" href="weather.html">Full forecast</a></div>
+          <div id="now-weather"><p class="muted">Getting the forecast…</p></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

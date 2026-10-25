@@ -10,6 +10,8 @@ Forecast CSV → value function (£/ha per field per hour) → planner (which fi
 - Replay past dates with real past forecasts: `uv run python replay.py 2026-10-10 2026-10-25 [planner]` (needs internet the first time)
 - Compare planners on past dates: `uv run python compare.py 2026-10-10 2026-10-25` (every `plan_*` in `harvest/planners/`, same data as replay)
 - Fresh forecast: `uv run python data/download_forecast.py`
+- Web app: `uv run --group web uvicorn webapp.server:app`, then open http://localhost:8000 (restart it after Python changes). Its tests: `uv run pytest webapp/tests -q`
+- Farmer site: `uv run --group web uvicorn farmer.server:app --port 8001`, then open http://localhost:8001. Its tests: `uv run pytest farmer/tests -q`
 
 ## Map
 - `params.yaml`: every number. Three modes: `run.py` (live: today's forecast, one member as the truth), `replay.py` (one planner on past dates), `compare.py` (every planner on past dates, plus a side-by-side window). Their settings are grouped in `params.yaml` the same way.
@@ -17,6 +19,8 @@ Forecast CSV → value function (£/ha per field per hour) → planner (which fi
 - Past dates: `harvest/past_data.py` (`past_rollout`) fetches the past forecast runs (dynamical.org, saved in `data/past_forecasts/`) and the weather that happened (Open-Meteo).
 - `scripts/`: helper scripts run by hand (`uv run python scripts/<name>.py`): `moisture_forecast.py` makes `outputs/moisture_forecast.csv` for `run.py`; `plot_*.py` and `moisture_sensitivity.py` save charts to `outputs/`; `rain_sensitivity.py` prints how much the rain settings matter.
 - `data/forecast.csv`: prediction data, format in `data/README.md`. `tests/test_pipeline.py`: all tests.
+- `webapp/`: the farmer's control panel (FastAPI + plain HTML/JS, details in `webapp/README.md`). Only `webapp/bridge.py` imports `harvest/`. **For anything in `webapp/static/`, follow `webapp/DESIGN.md`.**
+- `farmer/`: the website for farmers (the demo's look, few words, real weather maps, pretend controls; details in `farmer/README.md`). Only `farmer/source.py` imports the rest of the repo. **For anything in `farmer/static/`, follow `farmer/DESIGN.md`.**
 
 ## Ownership (fill in names)
 | Area | Files | Owner |
@@ -24,6 +28,8 @@ Forecast CSV → value function (£/ha per field per hour) → planner (which fi
 | Data + value function | `harvest/forecast.py`, `harvest/value.py`, `harvest/past_data.py`, `data/`, `scripts/` | `<NAME>` |
 | Planner | `harvest/planners/` | `<NAME>` |
 | Loop + results | `harvest/simulate.py`, `run.py`, `compare.py`, `replay.py`, `tests/` | `<NAME>` |
+| Web app | `webapp/` | `<NAME>` |
+| Farmer site | `farmer/` | `<NAME>` |
 
 `params.yaml` is shared: add keys freely, but tell the owner before changing someone else's.
 
@@ -37,7 +43,7 @@ Forecast CSV → value function (£/ha per field per hour) → planner (which fi
 7. Simplest thing that works. Short functions, clear names, comments that explain why. No classes or frameworks.
 
 ## Conventions
-- Every number goes in `params.yaml`, never hard-coded.
+- Every number goes in `params.yaml`, never hard-coded (numbers only the web app uses: `webapp/demo.yaml`).
 - Units in names: `_gbp`, `_ha`, `_hours`, `_pct`, `_mm`. Docstrings give array shapes, e.g. `[member, field, hour]`.
 - Arrays: `[member, field, hour]` for weather, `[field, hour]` for value, `[machine, hour]` for schedules.
 - The value function works per forecast member and averages only at the end.

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control · Time to Harvest</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/brand/css/tokens.css">
+  <link rel="stylesheet" href="css/farmer.css">
+  <script type="module" src="js/control.js"></script>
+</head>
+<body>
+  <header class="strip" id="topbar"></header>
+  <main class="page">
+    <section class="verdict" id="verdict"><h1>Loading…</h1></section>
+    <div class="actions" style="margin-top:14px">
+      <button class="button secondary" data-toast="All combines told to pause.">Pause all</button>
+      <button class="button" data-toast="All combines back to work.">Resume all</button>
+    </div>
+
+    <div class="machines" id="machines"></div>
+
+    <div class="settings">
+      <div id="plan-panel"></div>
+      <div id="alerts-panel"></div>
+      <div id="fields-panel"></div>
+    </div>
+  </main>
+</body>
+</html>

@@ -8,7 +8,7 @@ Letters used for array sizes (numbers are for the demo):
 
 | Letter | Meaning | Demo |
 |---|---|---|
-| `M` | forecast members (possible futures) | 51 in the CSV, 50 after one is held back as "truth" |
+| `M` | forecast members (possible futures) | 3 in the CSV, 2 after one is held back as "truth"; 51 in past runs |
 | `F` | fields, in the order of `fields` in `params.yaml` | 6 |
 | `K` | machines, in the order of `machines` in `params.yaml` | 3 |
 | `H` | hours | 168 in the CSV, 48 per plan, 48 in the season |

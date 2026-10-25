@@ -1,0 +1,39 @@
+# Numbers only the farmer site uses. The model's numbers stay in ../params.yaml and
+# ../webapp/demo.yaml (read, never changed).
+
+farm_name: Brook Farm
+place: Oxfordshire
+
+# Field status, worked out from the plan behind the scenes
+ready_chance: 0.7             # "Ready": can be cut now in at least this share of forecasts
+soon_hours: 12                # "Soon": ready at some hour within this many hours; otherwise "Wait"
+
+# Live clock: the site follows the real time through the simulated season.
+# panel?t=30 starts at hour 30, &speed=60 runs 60 times faster (both remembered while you browse)
+default_speed: 1
+
+# Weather (real, fetched by the browser from Open-Meteo and RainViewer)
+forecast_hours: 48            # hours shown on the forecast map and charts
+forecast_days: 7
+grid_points: 9                # the forecast map fetches a grid of this many points per side...
+grid_km: 140                  # ...spread over a square this wide around the farm
+radar_max_zoom: 7             # RainViewer serves radar tiles up to this zoom; deeper zooms stretch them
+good_humidity_pct: 75         # harvest weather: dry and below this humidity = good hour
+fair_humidity_pct: 90         # dry and below this = fair hour; anything wetter = poor
+dry_mm: 0.2                   # an hour with less rain than this counts as dry
+cache_minutes: 30             # the browser keeps weather this long before asking again
+weather_base_url: https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}
+weather_labels_url: https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}
+weather_attribution: "Forecast © Open-Meteo · Radar © RainViewer · Map © Esri"
+play_ms_per_hour: 400         # weather map animation speed
+
+# Map
+trail_minutes: 90             # how much of each combine's track is drawn behind it
+
+# Pretend machine readings for the control panel (no real telemetry yet)
+fake_telemetry:
+  tank_t: 11                  # grain tank size; it fills as the combine cuts, then unloads
+  yield_t_per_ha: 8           # for filling the tank
+  fuel_pct_per_engine_hour: 1.5
+  cutting_kmh: 5.0
+  road_kmh: 18.0

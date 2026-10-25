@@ -6,10 +6,10 @@ Run from the repo root (needs internet):
     uv run python data/download_past_weather.py 2026-10-01 2026-10-20   your own dates (inclusive)
 
 This is the weather that already happened, so there's one best estimate and no ensemble members.
-Same 9 km grid as the forecast (past_weather_model in params.yaml).
+Met Office UK 2 km, the same grid as the forecast (past_weather_model in params.yaml).
 
 Dates that aren't available are cut off with a warning. Open-Meteo has about 3 months back to
-about 2 weeks ahead, and ecmwf_ifs itself only keeps about the last 6 weeks.
+about 2 weeks ahead, and the model itself may keep less.
 """
 
 import re

@@ -51,7 +51,7 @@ uv run python compare.py 2026-10-10 2026-10-25       # or no dates: rollout_star
 ## How it works
 
 ```
-data/forecast.csv        prediction data: rain + humidity for 51 possible futures, per field, per hour
+data/forecast.csv        prediction data: rain + humidity for 3 possible futures, per field, per hour
        │
        ▼
 harvest/value.py         value function: expected £/ha if a field is harvested in each hour

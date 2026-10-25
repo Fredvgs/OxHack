@@ -1,0 +1,204 @@
+/* Layout and components. Colours and fonts come from tokens.css; rules in webapp/DESIGN.md. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 17px/1.5 var(--font-text);
+}
+
+h2 { font-weight: 500; font-size: 24px; line-height: 1.2; margin: 0 0 8px; }
+a { color: var(--ink); }
+
+.num, time, td, .key, .controls, .strip, .foot {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.label {
+  font: 500 12px/1 var(--font-data);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.muted { color: var(--ink-2); }
+
+/* status strip: what this page is, and how old its data is */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  align-items: baseline;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px;
+}
+
+/* three blocks, as sketched: weather top left, farm map top right, the plan across the bottom */
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  grid-template-areas: "weather farm" "plan plan";
+  /* the top row takes what the window leaves after the plan block (about 430px), at least 400px */
+  grid-template-rows: max(400px, calc(100vh - 480px)) auto;
+  gap: 12px;
+  padding: 16px 24px 0;
+}
+.box { border: 1px solid var(--rule); padding: 8px 14px 10px; min-width: 0; min-height: 0; }
+.weather { grid-area: weather; display: flex; flex-direction: column; }
+.weather-charts { flex: 1 1 0; min-height: 0; overflow: hidden; } /* panel.js splits its height */
+.farm { grid-area: farm; display: flex; flex-direction: column; }
+.plan { grid-area: plan; }
+
+.box-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 16px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+.box-head h2 { font-size: 19px; margin: 0; }
+.box-head time { font-size: 15px; }
+#field-summary { font-size: 12px; }
+
+.picker { display: flex; flex-wrap: wrap; gap: 4px; }
+.picker button { padding: 5px 9px; font-size: 12px; }
+#field-picker { margin-bottom: 4px; }
+
+/* the map fills what the combines table leaves of the block's height */
+#map { flex: 1 1 0; min-height: 160px; border: 1px solid var(--rule); background: var(--rule); }
+
+/* keys under the map and the plan */
+.key { font-size: 12px; color: var(--ink-2); margin: 6px 0 0; }
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 10px;
+  margin: 0 5px 0 14px;
+  vertical-align: -1px;
+}
+.swatch:first-child { margin-left: 0; }
+.swatch-cut { background: var(--paper); border: 1px solid var(--ink-2); }
+.swatch-value { background: var(--straw); }
+.swatch-blank { background: var(--paper); border: 1px solid var(--rule); }
+.swatch-rain { border: 2px dashed var(--rain); }
+.swatch-wet { border: 2px solid var(--alarm); }
+.loading { font-style: italic; color: var(--ink-2); }
+
+/* combines: a timetable, one row each; the clicked one's reasons underneath */
+.combines { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+.combines tr { border-top: 1px solid var(--rule); cursor: pointer; }
+.combines tr:last-child { border-bottom: 1px solid var(--rule); }
+.combines td { padding: 2px 6px 2px 0; vertical-align: baseline; }
+.combines .letter { font-weight: 500; width: 18px; }
+.combines .now { font-family: var(--font-text); font-size: 14px; }
+.combines .next { color: var(--ink-2); text-align: right; white-space: nowrap; }
+.combines tr.selected .now { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.dot { display: inline-block; width: 9px; height: 9px; margin-right: 6px; }
+.dot-cutting { background: var(--straw); }
+.dot-driving { background: var(--soil); }
+.dot-waiting { border: 1px solid var(--ink-2); }
+.dot-yard { border: 1px dotted var(--ink-2); }
+.why { font-size: 13px; line-height: 1.35; margin: 5px 0 0; min-height: 2.7em; }
+.why .label { margin-right: 6px; }
+
+/* the plan: what the last replan changed, time controls, decision map */
+.plan-change { font-size: 15px; margin: 0 0 8px; min-height: 1.5em; color: var(--ink-2); }
+.plan-change.fresh { color: var(--ink); }
+.plan-change .label { margin-right: 8px; }
+.controls { display: flex; gap: 16px; align-items: baseline; font-size: 12px; }
+#scrub-label { font-size: 15px; }
+#decision-key .swatch { margin: 0 3px 0 0; }
+#decision-key .step { margin-right: 10px; }
+button {
+  font: 500 13px/1 var(--font-data);
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  padding: 7px 14px;
+  cursor: pointer;
+}
+button.secondary { background: none; color: var(--ink); border-color: var(--rule); }
+button.secondary[aria-pressed="true"] { border-color: var(--ink); }
+
+/* the decision map's left and right margins (charts.js PLAN_MARGINS), so hours line up */
+.scrub-track { padding: 6px 64px 0 96px; }
+input[type="range"] {
+  width: 100%;
+  margin: 0;
+  appearance: none;
+  background: none;
+  height: 18px;
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--ink-2); }
+input[type="range"]::-moz-range-track { height: 1px; background: var(--ink-2); }
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 4px;
+  height: 18px;
+  margin-top: -9px;
+  background: var(--ink);
+  border-radius: 0;
+}
+input[type="range"]::-moz-range-thumb { width: 4px; height: 18px; background: var(--ink); border: 0; border-radius: 0; }
+
+/* method and caveats */
+.method {
+  margin: 32px 24px 0;
+  border-top: 1px solid var(--rule);
+  padding-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  font-size: 16px;
+}
+.method p, .method ul { max-width: 68ch; margin: 0 0 10px; }
+.method ul { padding-left: 18px; }
+
+.foot { border-top: 1px solid var(--rule); padding: 12px 24px 24px; font-size: 12px; color: var(--ink-2); }
+
+/* Leaflet, restyled to match: square, no shadows */
+.leaflet-container { font-family: var(--font-data); }
+.leaflet-tile { mix-blend-mode: plus-lighter; } /* no hairline seams between tiles at fractional zoom */
+.leaflet-bar, .leaflet-bar a { border-radius: 0 !important; }
+.leaflet-touch .leaflet-bar { border: 1px solid var(--rule); box-shadow: none; }
+.leaflet-tooltip.field-tag {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  box-shadow: none;
+  font: 11px/1.3 var(--font-data);
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+.leaflet-tooltip.field-tag::before { display: none; }
+.yard-tag {
+  background: var(--ink);
+  color: var(--paper);
+  font: 500 11px/1 var(--font-data);
+  padding: 4px 6px;
+  width: auto !important;
+  height: auto !important;
+  white-space: nowrap;
+}
+.combine {
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: var(--paper);
+  font: 500 12px/1 var(--font-data);
+  border: 2px solid var(--straw);
+}
+.combine[data-activity="driving"] { border-color: var(--soil); }
+.combine[data-activity="waiting"], .combine[data-activity="yard"] { border-color: var(--paper); }
+
+@media (max-width: 900px) {
+  .dashboard { grid-template-columns: 1fr; grid-template-areas: "farm" "weather" "plan"; }
+  .method { grid-template-columns: 1fr; }
+}

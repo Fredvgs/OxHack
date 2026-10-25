@@ -1,15 +1,17 @@
 # data/: prediction data
 
-`forecast.csv` is the weather forecast the pipeline runs on: 51 possible futures ("members")
-for every field and hour. The committed copy is real ECMWF IFS ensemble data at its native 9 km
-resolution (`ecmwf_ifs_europe_ensemble`) from the
+`forecast.csv` is the weather forecast the pipeline runs on: 3 possible futures ("members")
+for every field and hour. The committed copy is real Met Office MOGREPS-UK ensemble data at 2 km
+(`ukmo_uk_ensemble_2km`) from the
 [Open-Meteo Ensemble API](https://open-meteo.com/en/docs/ensemble-api), `forecast_hours` from
-`forecast_start` in `params.yaml`. The 9 km model covers Europe only and stops ~144 h after its
-run time, so keep `forecast_hours` inside that, and at least `season_hours`.
+`forecast_start` in `params.yaml`. The 2 km model covers the UK only and stops about 120 h after
+its run time, so keep `forecast_hours` inside that, and at least `season_hours`. For more members,
+set `forecast_model: ecmwf_ifs_europe_ensemble` (ECMWF 9 km, 51 members, ~144 h) and download again.
 
-The demo fields borrow weather from places across Europe (Inverness to Ukraine), because fields
-close together all get the same weather. Their `lat`/`lon` only pick the weather; driving times
-come from `travel_hours`.
+The demo fields are Brook Farm, Oxfordshire: the centres of the outlines in
+`webapp/data/demo_farm.geojson`. They're within 1 km of each other, so they fall in one or two
+2 km grid cells and get almost the same weather. Their `lat`/`lon` only pick the weather; driving
+times come from `travel_hours`.
 
 ## Format
 
@@ -18,7 +20,7 @@ One row per hour, member and field:
 | column | meaning | unit |
 |---|---|---|
 | `hour` | hours since the forecast start: 0, 1, 2, ... | hours |
-| `member` | which forecast member: 0 = main run, 1 to 50 = variations | |
+| `member` | which forecast member: 0 = main run, 1 to 2 = variations (1 to 50 for ECMWF) | |
 | `field` | field name, matching `name` in `params.yaml` | |
 | `temp_c` | air temperature at 2 m | °C |
 | `humidity_pct` | relative humidity at 2 m | % |
@@ -26,7 +28,7 @@ One row per hour, member and field:
 
 ```
 hour,member,field,temp_c,humidity_pct,rain_mm
-0,0,inverness_uk,10.9,68,0.0
+0,0,barn_field,10.3,75,0.0
 ```
 
 Every field in `params.yaml` needs the same set of members and hours. Extra columns are ignored.
@@ -58,7 +60,9 @@ uv run python replay.py 2026-10-10 2026-10-25
 (`past_forecast_dataset` in `params.yaml`, free, no account). A run can only be used
 `forecast_delay_hours` after it starts, when ECMWF publishes it. The weather that really happened
 comes from Open-Meteo's [historical forecast API](https://open-meteo.com/en/docs/historical-forecast-api)
-(`past_weather_model`, the same 9 km model, hourly), up to the last full hour before now.
+(`past_weather_model`, the Met Office UK 2 km model, hourly), up to the last full hour before now.
+No archive keeps past Met Office UK ensemble runs, so replays plan on ECMWF while the live
+forecast is MOGREPS-UK.
 
 Each run is downloaded the first time it's needed (about 5-10 s) and saved in
 `data/past_forecasts/<dataset>/<run start>.csv` (not in git), as the archive has it:
@@ -91,8 +95,8 @@ uv run python data/download_past_weather.py 2026-10-01 2026-10-20   # your own d
 ```
 
 Writes `past_weather.csv`: one row per hour and field, the weather that already happened (one best
-estimate, so no `member` column). It comes from the `past_weather_model` in `params.yaml`, which
-uses the same 9 km grid as the forecast. The ensemble API keeps no past data.
+estimate, so no `member` column). It comes from the `past_weather_model` in `params.yaml`, the
+Met Office UK 2 km model, on the same grid as the forecast. The ensemble API keeps no past data.
 
 | column | meaning | unit |
 |---|---|---|
@@ -103,5 +107,4 @@ uses the same 9 km grid as the forecast. The ensemble API keeps no past data.
 | `rain_mm` | rain during that hour | mm |
 
 Dates that aren't available are cut off with a warning, and the script stops if nothing is left.
-Open-Meteo has about 3 months back to about 2 weeks ahead, but `ecmwf_ifs` only keeps about the
-last 6 weeks.
+Open-Meteo has about 3 months back to about 2 weeks ahead, and the model itself may keep less.

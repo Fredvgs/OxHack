@@ -60,6 +60,9 @@ always with a legend.
 ## Motion
 - Only things that change with time move: combines, the cut area, the now line, the home page's
   footage. No scroll animations, no counting-up numbers, no hover lifts.
+- The cut area is the field's passes in paper, one pass wide, ending under the combine.
+- The Map's Play runs the next 48 h fast, with PLAY in the clock and the hours ahead counted
+  next to the button, then goes back to live by itself.
 
 ## Real and pretend
 - Weather is real (Open-Meteo forecast, RainViewer radar), fetched live by the browser.

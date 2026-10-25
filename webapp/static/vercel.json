@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/farm", "destination": "/saved/farm.json" },
+    { "source": "/api/season", "destination": "/saved/season.json" }
+  ]
+}

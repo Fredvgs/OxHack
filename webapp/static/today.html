@@ -14,29 +14,16 @@
   <main class="page">
     <section class="verdict" id="verdict"><h1>Loading…</h1></section>
 
+    <!-- the combines' chart next to the weather, the fields' chart full width (one row per field),
+         then the field and combine tables -->
     <div class="columns">
       <div>
         <section class="section">
-          <div class="section-head"><h2>Fields</h2><span class="num muted" id="harvested"></span></div>
-          <table class="data">
-            <thead><tr><th>Field</th><th class="wide">Crop</th><th class="r wide">Area</th><th>Cut</th><th class="r">Moisture</th><th>Status</th><th>Combine</th><th class="wide">Best time</th></tr></thead>
-            <tbody id="fields"></tbody>
-          </table>
+          <div class="section-head"><h2>Where the combines go</h2><span class="num muted">so far, then the plan</span></div>
+          <div class="chart-box" id="route-chart"></div>
+          <p class="key"><span class="swatch cutting"></span>cutting <span class="swatch road"></span>on the road
+            <span class="swatch blank"></span>waiting · blank: at the yard · dashed: the plan ahead</p>
         </section>
-
-        <section class="section">
-          <div class="section-head"><h2>Combines</h2><a class="num" href="map.html">Open map</a></div>
-          <table class="data">
-            <thead><tr><th></th><th>Now</th><th>Next</th></tr></thead>
-            <tbody id="combines"></tbody>
-          </table>
-        </section>
-
-        <div class="actions">
-          <button class="button" data-toast="Plan sent to the 3 drivers.">Send plan to drivers</button>
-          <button class="button secondary" data-toast="Drying store booked for tomorrow.">Book drying store</button>
-          <button class="button secondary" data-toast="Calling the yard…">Call yard</button>
-        </div>
       </div>
 
       <aside>
@@ -59,11 +46,26 @@
     </section>
 
     <section class="section">
-      <div class="section-head"><h2>Where the combines go</h2><span class="num muted">so far, then the plan</span></div>
-      <div class="chart-box" id="route-chart"></div>
-      <p class="key"><span class="swatch cutting"></span>cutting <span class="swatch road"></span>on the road
-        <span class="swatch blank"></span>waiting · blank: at the yard · dashed: the plan ahead</p>
+      <div class="section-head"><h2>Fields</h2><span class="num muted" id="harvested"></span></div>
+      <table class="data">
+        <thead><tr><th>Field</th><th class="wide">Crop</th><th class="r wide">Area</th><th>Cut</th><th class="r">Moisture</th><th>Status</th><th>Combine</th><th class="wide">Best time</th></tr></thead>
+        <tbody id="fields"></tbody>
+      </table>
     </section>
+
+    <section class="section">
+      <div class="section-head"><h2>Combines</h2><a class="num" href="map.html">Open map</a></div>
+      <table class="data">
+        <thead><tr><th></th><th>Now</th><th>Next</th></tr></thead>
+        <tbody id="combines"></tbody>
+      </table>
+    </section>
+
+    <div class="actions">
+      <button class="button" data-toast="Plan sent to the 3 drivers.">Send plan to drivers</button>
+      <button class="button secondary" data-toast="Drying store booked for tomorrow.">Book drying store</button>
+      <button class="button secondary" data-toast="Calling the yard…">Call yard</button>
+    </div>
   </main>
 </body>
 </html>

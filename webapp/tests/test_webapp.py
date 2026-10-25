@@ -7,7 +7,7 @@ import json
 
 import numpy as np
 
-from webapp import demo_state, tracks
+from webapp import demo_state, export_static, tracks
 
 
 def test_passes_cover_a_rectangle_along_its_long_side():
@@ -16,6 +16,27 @@ def test_passes_cover_a_rectangle_along_its_long_side():
     assert path.shape == (8, 2)  # 4 passes, each a start and an end
     assert np.allclose(path[:, 1], [5, 5, 15, 15, 25, 25, 35, 35])  # 10 m apart, inside the field
     assert np.allclose(path[:, 0], [0, 100, 100, 0, 0, 100, 100, 0])  # every other pass drives back
+
+
+def test_passes_stop_at_the_edge_of_an_odd_shaped_field():
+    # 100 m x 40 m with a notch 40 m wide cut into the top, down to 20 m
+    u_shape = np.array(
+        [[0, 0], [100, 0], [100, 40], [70, 40], [70, 20], [30, 20], [30, 40], [0, 40]], dtype=float
+    )
+    path = tracks.passes(u_shape, width_m=10)
+    assert path.shape == (12, 2)  # 2 passes right across, then 2 broken by the notch
+    in_notch = (path[:, 0] > 30) & (path[:, 0] < 70) & (path[:, 1] > 20)
+    assert not in_notch.any()
+
+
+def test_route_follows_field_edges_and_hops_the_gap():
+    a = np.array([[0, 0], [100, 0], [100, 100], [0, 100]], dtype=float)
+    b = np.array([[120, -20], [220, -20], [220, 40], [120, 40]], dtype=float)  # 28 m away
+    network = tracks.edge_network([a, b], hop_m=50, off_edge_factor=3)
+    way = tracks.route(network, np.array([-5, -5]), np.array([225, -25]))
+    # along a's bottom edge, across the gap where the fields come closest, along b's bottom edge
+    expected = [[-5, -5], [0, 0], [100, 0], [120, -20], [220, -20], [225, -25]]
+    assert np.allclose(way, expected)
 
 
 def test_point_along_a_path():
@@ -38,8 +59,12 @@ def test_combine_drives_from_the_yard_then_follows_the_cutting():
     place = np.array([[0, 0, 0]])  # [machine, hour]: field 0 throughout (1 = the yard)
     driving = np.array([[True, False, False]])  # an hour on the road, then cutting
     cut_share = np.array([[0, 0, 0.5, 1.0]])  # [field, hour + 1]
+
+    def straight(start, end):  # no field edges here: drive straight
+        return np.array([start, end])
+
     positions = tracks.combine_positions(
-        place, driving, [1], cut_share, [path], np.zeros(2), steps=2, gap_m=0, yard_gap_m=10
+        place, driving, [1], cut_share, [path], straight, np.zeros(2), 2, gap_m=0, yard_gap_m=10
     )
     assert positions.shape == (1, 7, 2)  # 3 hours x 2 steps + the end
     assert np.allclose(positions[0, 0], [10, -10])  # parked at the yard
@@ -85,3 +110,11 @@ def test_cards_agree_with_what_the_combines_do():
         for m, card in enumerate(cards):
             assert card["status"] == plan["activity"][m][hour]
             assert card["next"]  # always says what happens next
+
+
+def test_export_saves_both_answers_for_a_static_host(tmp_path):
+    farm_path, season_path = export_static.export(tmp_path)
+    farm = json.loads(farm_path.read_text(encoding="utf-8"))
+    season = json.loads(season_path.read_text(encoding="utf-8"))
+    assert farm["saved"] and farm["season_start_utc"] and farm["hours"] > 0
+    assert season

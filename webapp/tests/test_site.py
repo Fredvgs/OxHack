@@ -39,3 +39,6 @@ def test_totals_only_go_up():
     season = source.season()
     assert (np.diff(season["harvested_ha"]) >= -1e-9).all()
     assert (np.diff(season["earned_gbp"]) >= -1e-9).all()
+    cut = np.array(season["cut_share"])  # [field, hour + 1], what the Map draws as cut ground
+    assert (cut >= 0).all() and (cut <= 1).all()
+    assert (np.diff(cut, axis=1) >= 0).all()

@@ -34,6 +34,8 @@ chart_temp_steps_c: [5, 10, 15, 20, 25]  # temperature, cold to warm
 
 # Map
 trail_minutes: 90             # how much of each combine's track is drawn behind it
+map_play_hours: 48            # the Map's Play button runs this many hours ahead...
+map_play_seconds_per_hour: 1  # ...one hour in this many seconds, then goes back to live
 
 # Pretend machine readings for the Control page (no real telemetry yet)
 fake_telemetry:

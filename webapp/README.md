@@ -18,8 +18,8 @@ weather load from the internet; record a backup video.
 | Page | What it shows |
 |---|---|
 | **Home** (`index.html`) | The title, the slogan and **Log in**, which opens the dashboard on the Map (no account check), next to b-roll of the harvest: three aerial clips of machines at work, no people in shot, taking turns, each with its credit (`static/media/CREDITS.md`) |
-| **Map** (`map.html`) | Satellite map, fields filled by status and outlined by crop (labels that would overlap hide until you zoom in), combines moving along their GPS tracks with a trail, a card per combine (readings, Send there / Back to yard / Call driver). Layer switches for live rain radar, rain forecast and wind, which zoom out to the area around the farm |
-| **Today** (`today.html`) | One big answer (Cut now / Wait a little / Not today), the real weather now and for the next 12 h, every field (Ready / Soon / Wait / Done, % cut, grain moisture, which combine the plan sends and when, best time), every combine (what it's doing, next move), and two charts of the plan in force on one hour axis: the weather each field gets hour by hour, one tab at a time (Rain: chance of rain; Moisture: no drying charge / drying charged / heavy drying / too wet to cut, by each crop's limit; Temperature), with where each combine is sent; and where each combine goes (done so far, then the plan). `today.html?tab=moisture` opens a tab |
+| **Map** (`map.html`) | Satellite map, fields filled by status and outlined by crop (labels that would overlap hide until you zoom in), the ground cut so far drawn pass by pass, combines moving along their GPS tracks (passes up and down the field while cutting, along the field edges between fields and parcels; on the road they leave a trail), **Play** to run through the next 48 h of the season in 48 s and come back to live (`map_play_*` in `site.yaml`; the other pages' clock isn't touched), a card per combine (readings, Send there / Back to yard / Call driver). Layer switches for live rain radar, rain forecast and wind, which zoom out to the area around the farm |
+| **Today** (`today.html`) | One big answer (Cut now / Wait a little / Not today), then two charts of the plan in force on one hour axis: where each combine goes (done so far, then the plan), next to the real weather now and for the next 12 h; and, full width under them, the weather each field gets hour by hour, one tab at a time (Rain: chance of rain; Moisture: no drying charge / drying charged / heavy drying / too wet to cut, by each crop's limit; Temperature), with where each combine is sent. Below them, every field (Ready / Soon / Wait / Done, % cut, grain moisture, which combine the plan sends and when, best time) and every combine (what it's doing, next move). `today.html?tab=moisture` opens a tab |
 | **Weather** (`weather.html`) | Forecast maps (rain, temperature, wind, clouds, radar) with a time slider and play, the next 7 days, and the next 48 h rated for harvesting (good / fair / poor) with the best window |
 | **Control** (`control.html`) | Each combine: fuel, grain tank, speed, switches (engine, header, auto-steer, lights), Send / Yard / Call. Plan switches and Update plan, alert switches, fields with Skip and priority |
 
@@ -40,6 +40,19 @@ weather load from the internet; record a backup video.
 On today's forecast, one forecast member plays the real weather, so a field can show "Wait" while
 the real sky is dry. A past week plays the weather that really followed, the same record the
 weather pages show.
+
+## On Vercel (no Python)
+
+The two API answers can be saved as files, and the site then runs on any static host:
+
+```
+uv run --group web python -m webapp.export_static    writes static/saved/farm.json, season.json
+```
+
+On Vercel: import the repo, set **Root Directory** to `webapp/static`, Framework Preset **Other**,
+no build command. `static/vercel.json` sends `/api/farm` and `/api/season` to the saved files.
+Export again and commit after changing the model, `site.yaml` or `demo.yaml`. The browser moves
+the saved season's start to today at the same time of day (`common.js`), as the server does.
 
 ## The demo's week
 
@@ -75,11 +88,12 @@ the hedgerows, keep the properties, and save it back. The model still uses `area
 | File | Job |
 |---|---|
 | `bridge.py` | **the only file that imports `harvest/`**. Runs the season, adds the forecast each plan saw and the share of forecasts in which each field can be cut |
-| `tracks.py` | field outline → passes up and down; the season → where each combine is, 6 times an hour |
+| `tracks.py` | field outline → passes up and down; every parcel's edge → the combines' roads (`edge_hop_m`, `off_edge_factor` in `demo.yaml`); the season → where each combine is, once a minute |
 | `explain.py` | the combine cards and what each replan changed, in words, from the model's numbers |
 | `demo_state.py` | the demo farm and its season in memory, as plain data |
 | `source.py` | that season in farmer terms: each field Ready / Soon / Wait / Done, best time, moisture, what each combine does next |
 | `server.py` | FastAPI: `GET /api/farm`, `GET /api/season`, and the pages in `static/` |
+| `export_static.py` | saves those two answers in `static/saved/` for a static host (Vercel) |
 | `demo.yaml` | how the season is run (planner, the demo's week, map tiles, ...) |
 | `site.yaml` | what the pages show (status rules, weather grid, map, pretend readings) |
 | `data/demo_farm.geojson` | field outlines and the yard |

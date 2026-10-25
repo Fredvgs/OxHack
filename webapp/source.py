@@ -92,6 +92,8 @@ def season():
         "planned":      [field][hour] who the plan in force sends next and when: "A · Mon 07:00",
                         "now · A" while being cut, or None if this plan doesn't get there
         "cut_pct":      [field][hour + 1] share of the field cut, %
+        "cut_share":    [field][hour + 1] the same, 0-1 to 4 decimals: the Map draws the cut ground
+                        with it, so it ends under the combine
         "doing":        [hour][machine] "Cutting Long Ground" ...
         "next":         [hour][machine] "Brook Furlong, Sun 09:00" ...
         "activity", "place": [machine][hour], "tracks": [machine][frame][lat, lng]
@@ -137,6 +139,7 @@ def season():
         "best": best.tolist(),
         "planned": planned.tolist(),
         "cut_pct": np.round(100 * (1 - standing / area[:, None])).tolist(),
+        "cut_share": np.round(1 - standing / area[:, None], 4).tolist(),
         "doing": [[card["headline"] for card in cards] for cards in plan["cards"]],
         "next": [[card["next"] for card in cards] for cards in plan["cards"]],
         "activity": plan["activity"],

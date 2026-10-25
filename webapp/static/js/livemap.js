@@ -1,5 +1,6 @@
-// Live map: satellite, fields shaded by status, combines moving along their GPS tracks, and real
-// weather layers (radar, rain forecast, wind) that zoom out to show the area around the farm.
+// Live map: satellite, fields shaded by status, the ground cut so far, combines moving along their
+// GPS tracks, Play to run through the next hours, and real weather layers (radar, rain forecast,
+// wind) that zoom out to show the area around the farm.
 
 import { $, ACTIVITY, crop, everySecond, lamp, load, makeClock, showAlerts, telemetry, toast, topbar } from "./common.js";
 import { gridBounds, gridForecast, gridImage, legend, nowIndex, radarFrames, windArrows } from "./weather-data.js";
@@ -7,7 +8,11 @@ import { gridBounds, gridForecast, gridImage, legend, nowIndex, radarFrames, win
 const { farm, season } = await load();
 // radar is live only: a demo replaying a past week has none to show
 if (farm.week) $("#layer-radar").closest("label").style.display = "none";
-const clock = makeClock(farm);
+const live = makeClock(farm);
+// Play runs this page ahead on its own clock (the other pages stay where they are)
+let play = null; // {from, to, wall}: hours, and performance.now() when it started
+const clock = () => (play ? Math.min(play.from + (performance.now() - play.wall) / 1000 / farm.site.map_play_seconds_per_hour, play.to) : live());
+clock.live = live.live;
 topbar(farm, "map.html", clock);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
 
@@ -43,6 +48,51 @@ $("#crop-key").innerHTML = [...new Set(farm.fields.map((field) => field.crop))]
 const farmBounds = L.featureGroup(fields).getBounds();
 map.fitBounds(farmBounds, FARM_VIEW);
 
+// ---------- the cut ground: each field's passes, one pass wide, as far as it is cut ----------
+// The combines' tracks follow the same passes to the same point (webapp/tracks.py), so the cut
+// ground always ends under the combine.
+const EARTH_M = 40_075_016.686; // round the equator: the width of the zoom 0 map tile
+const cutGround = farm.fields.map(() => L.polyline([], { color: css("paper"), opacity: 0.6, interactive: false }).addTo(map));
+const cutShown = farm.fields.map(() => -Infinity); // metres each line shows, so others aren't redrawn
+
+// the passes driven up to `metres` along a field's path: [parcel][point][lat, lng], one line per
+// parcel, leaving out the way along the field edges from one parcel to the next
+function cutPasses(field, metres) {
+  const { path, path_m: along, pass_ranges: ranges } = field;
+  return ranges
+    .map(([start, end]) => {
+      let i = start;
+      while (i < end && along[i] <= metres) i++;
+      const line = path.slice(start, i);
+      if (i > start && i < end) {
+        const share = (metres - along[i - 1]) / (along[i] - along[i - 1]);
+        line.push(path[i - 1].map((x, d) => x + (path[i][d] - x) * share));
+      }
+      return line;
+    })
+    .filter((line) => line.length > 1);
+}
+
+function drawCut(time) {
+  const hour = Math.floor(time);
+  farm.fields.forEach((field, f) => {
+    const [before, after] = season.cut_share[f].slice(hour, hour + 2);
+    const metres = (before + (after - before) * (time - hour)) * field.path_m.at(-1);
+    if (Math.abs(metres - cutShown[f]) < 1) return;
+    cutShown[f] = metres;
+    cutGround[f].setLatLngs(cutPasses(field, metres));
+  });
+}
+
+// one pass wide at every zoom: a pixel is EARTH_M x cos(latitude) / (256 x 2^zoom) metres
+function passWidth() {
+  const metresPerPixel = (EARTH_M * Math.cos((farm.centre[0] * Math.PI) / 180)) / 2 ** (map.getZoom() + 8);
+  const weight = Math.max(1, farm.map.pass_width_m / metresPerPixel);
+  cutGround.forEach((line) => line.setStyle({ weight }));
+}
+passWidth();
+map.on("zoomend", passWidth);
+
 // the yard label and the combines sit above the field labels (Leaflet's tooltip pane is 650)
 map.createPane("top").style.zIndex = 700;
 L.marker(farm.yard, { pane: "top", interactive: false, icon: L.divIcon({ className: "yard-tag", html: "Yard", iconSize: [40, 18], iconAnchor: [46, 9] }) }).addTo(map);
@@ -66,15 +116,30 @@ function position(m, frame) {
 }
 
 function moveCombines() {
-  const frame = clock() * farm.steps_per_hour;
-  const back = (farm.site.trail_minutes / 60) * farm.steps_per_hour;
+  const time = clock();
+  if (play && time >= play.to) stopPlay();
+  drawCut(time);
+  const frame = time * farm.steps_per_hour;
   farm.machines.forEach((_, m) => {
     const now = position(m, frame);
     markers[m].setLatLng(now);
-    const past = $("#layer-trails").checked ? season.tracks[m].slice(Math.max(0, Math.ceil(frame - back)), Math.floor(frame) + 1) : [];
-    trails[m].setLatLngs(past.length ? [...past, now] : []);
+    trails[m].setLatLngs($("#layer-trails").checked ? roadTrail(m, frame, now) : []);
   });
   requestAnimationFrame(moveCombines);
+}
+
+// the way a combine came on the road in the last trail_minutes: [stretch][point]. Its cutting
+// shows as cut ground instead, which a trail drawn over the passes would hide.
+function roadTrail(m, frame, now) {
+  const steps = farm.steps_per_hour;
+  const onRoad = (i) => season.activity[m][Math.floor(i / steps)] === "driving";
+  const stretches = [[]];
+  for (let i = Math.max(0, Math.ceil(frame - (farm.site.trail_minutes / 60) * steps)); i <= frame; i++) {
+    if (onRoad(i) || (i > 0 && onRoad(i - 1))) stretches.at(-1).push(season.tracks[m][i]); // to where it arrived
+    else if (stretches.at(-1).length) stretches.push([]);
+  }
+  if (onRoad(frame)) stretches.at(-1).push(now);
+  return stretches.filter((stretch) => stretch.length > 1);
 }
 requestAnimationFrame(moveCombines);
 
@@ -126,8 +191,31 @@ function showHour(hour) {
     })
     .join("");
   showAlerts(farm, season, hour);
+  if (play) $("#play-note").textContent = `+${hour - Math.floor(play.from)} h`;
 }
 everySecond(clock, season, { hour: showHour });
+
+// ---------- Play: the next hours of the season in under a minute, then back to live ----------
+const playHours = farm.site.map_play_hours;
+const playIdle = `${playHours} h in ${Math.round(playHours * farm.site.map_play_seconds_per_hour)} s`;
+$("#play-label").textContent = `Next ${playHours} h`;
+$("#play-note").textContent = playIdle;
+
+function startPlay() {
+  const from = live();
+  play = { from, to: Math.min(from + playHours, farm.hours - 0.001), wall: performance.now() };
+  $("#play").textContent = "Stop";
+  $("#play-note").textContent = "+0 h";
+  $("#clock-box .mode").textContent = "PLAY";
+}
+
+function stopPlay() {
+  play = null;
+  $("#play").textContent = "Play";
+  $("#clock-box .mode").textContent = live.live ? "LIVE" : "REPLAY";
+  $("#play-note").textContent = playIdle;
+}
+$("#play").addEventListener("click", () => (play ? stopPlay() : startPlay()));
 
 $("#combine-list").addEventListener("click", (event) => {
   const row = event.target.closest("[data-combine]");

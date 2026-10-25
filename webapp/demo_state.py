@@ -57,10 +57,42 @@ def parcel_paths():
 
 
 @cache
+def edge_network():
+    """Every parcel's edge as the combines' roads, in metres from the yard (tracks.edge_network)."""
+    _, demo, _ = season()
+    _, outlines, yard = geometry()
+    parcels = [tracks.to_metres(parcel, yard) for field in outlines for parcel in field]
+    return tracks.edge_network(parcels, demo["edge_hop_m"], demo["off_edge_factor"])
+
+
+def route(start, end):
+    """The way a combine drives from start to end, along the field edges: [point, 2] metres."""
+    return tracks.route(edge_network(), start, end)
+
+
+@cache
 def field_paths():
-    """[field] of [point, 2] metres from the yard: the passes a combine drives in each field,
-    one parcel after another."""
-    return [np.concatenate(parcels) for parcels in parcel_paths()]
+    """The way a combine drives through each field: the passes in one parcel, then along the
+    field edges to the next parcel, and so on.
+
+    returns: (paths [field] of [point, 2] metres from the yard,
+              ranges [field] of [parcel] [first, end) where its passes are in the path, so the
+              cut ground isn't drawn along the way from one parcel to the next)
+    """
+    paths, ranges = [], []
+    for parcels in parcel_paths():
+        pieces, spans, length = [], [], 0
+        for k, passes in enumerate(parcels):
+            if k:
+                between = route(pieces[-1][-1], passes[0])[1:-1]  # its ends are passes already
+                pieces.append(between)
+                length += len(between)
+            spans.append([length, length + len(passes)])
+            pieces.append(passes)
+            length += len(passes)
+        paths.append(np.concatenate(pieces))
+        ranges.append(spans)
+    return paths, ranges
 
 
 def machine_label(machine):
@@ -82,10 +114,10 @@ def latlng(lonlat):
 def farm():
     params, demo, _ = season()
     labels, outlines, yard = geometry()
+    paths, ranges = field_paths()
     fields = []
     for f, field in enumerate(params["fields"]):
-        path = tracks.to_lonlat(field_paths()[f], yard)
-        parcel_lengths = [len(parcel) for parcel in parcel_paths()[f]]
+        path = tracks.to_lonlat(paths[f], yard)
         fields.append(
             {
                 "name": field["name"],
@@ -97,9 +129,9 @@ def farm():
                 # [parcel][ring][corner][lat, lng]: Leaflet draws this as one MultiPolygon
                 "outline": [[latlng(parcel)] for parcel in outlines[f]],
                 "path": latlng(path),
-                "path_m": np.round(tracks.distance_along(field_paths()[f]), 1).tolist(),
-                # where each parcel's passes start in path, so the drawn stubble can break there
-                "parcel_starts": np.cumsum([0] + parcel_lengths[:-1]).tolist(),
+                "path_m": np.round(tracks.distance_along(paths[f]), 1).tolist(),
+                # [parcel] [first, end) of its passes in path: the cut ground is drawn only there
+                "pass_ranges": ranges[f],
             }
         )
     machines = [
@@ -140,7 +172,8 @@ def plan():
         result["driving"],
         start_place,
         1 - run["standing_ha"] / area[:, None],
-        field_paths(),
+        field_paths()[0],
+        route,
         np.zeros(2),  # the paths are in metres from the yard
         demo["steps_per_hour"],
         demo["combine_gap_m"],
@@ -159,7 +192,6 @@ def plan():
         "steps_per_hour": demo["steps_per_hour"],
         "wait": bridge.WAIT,  # in a schedule: stay where you are
         "band_percentiles": demo["band_percentiles"],
-        "play_seconds_per_hour": demo["play_seconds_per_hour"],
         "labels": [f"{time:%a %d %b %H:%M}" for time in times],  # [hour + 1]
         "times_iso": [f"{time:%Y-%m-%dT%H:%M}" for time in times],  # [hour + 1] local time
         "days": [{"hour": h, "label": f"{t:%a %d}"} for h, t in enumerate(times) if t.hour == 0],

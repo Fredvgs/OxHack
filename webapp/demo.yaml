@@ -15,8 +15,12 @@ map_attribution: Imagery © Esri, Maxar, Earthstar Geographics · Fields traced 
 pass_width_m: 12              # distance between a combine's passes up and down a field (header width)
 combine_gap_m: 30             # how far apart along the passes two combines in the same field are drawn
 yard_gap_m: 60                # how far apart combines park at the yard, in a row south-east of it
-steps_per_hour: 6             # combine positions sent per simulated hour; the browser draws in between
-play_seconds_per_hour: 0.5    # playback speed: one simulated hour takes this long
+steps_per_hour: 60            # combine positions sent per simulated hour, one a minute so they keep to
+                              # the passes and field edges; the browser draws in between
+edge_hop_m: 150               # combines drive along field edges, hopping gaps up to this between
+                              # neighbouring fields (lanes, hedges, tracks)...
+off_edge_factor: 3            # ...and a longer hop across country counts this many times its length,
+                              # so they keep to field edges where they can
 
 # What each plan's outlook and the combine cards are built from
 band_percentiles: [10, 50, 90]  # forecast members summarised as low / middle / high moisture

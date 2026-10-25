@@ -20,7 +20,17 @@ export async function load() {
     return response.json();
   };
   const [farm, season] = await Promise.all([get("/api/farm"), get("/api/season")]);
+  if (farm.saved) toToday(farm);
   return { farm, season };
+}
+
+// A saved season (webapp/export_static.py, for a static host) started on the day it was saved.
+// Move its start by whole days to the last one before now, as the server would start it today.
+function toToday(farm) {
+  const start = Date.parse(farm.season_start_utc);
+  const days = Math.floor((Date.now() - start) / 864e5);
+  farm.season_start_utc = new Date(start + days * 864e5).toISOString();
+  if (farm.week) farm.week.day_shift_days -= days;
 }
 
 // ---------- the clock ----------

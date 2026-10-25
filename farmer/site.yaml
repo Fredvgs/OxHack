@@ -1,7 +1,7 @@
 # Numbers only the farmer site uses. The model's numbers stay in ../params.yaml and
 # ../webapp/demo.yaml (read, never changed).
 
-farm_name: Brook Farm
+farm_name: Elveden Estate
 place: Oxfordshire
 
 # Field status, worked out from the plan behind the scenes

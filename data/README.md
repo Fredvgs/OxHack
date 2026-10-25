@@ -8,9 +8,9 @@ for every field and hour. The committed copy is real Met Office MOGREPS-UK ensem
 its run time, so keep `forecast_hours` inside that, and at least `season_hours`. For more members,
 set `forecast_model: ecmwf_ifs_europe_ensemble` (ECMWF 9 km, 51 members, ~144 h) and download again.
 
-The demo fields are Brook Farm, Oxfordshire: the centres of the outlines in
-`webapp/data/demo_farm.geojson`. They're within 1 km of each other, so they fall in one or two
-2 km grid cells and get almost the same weather. Their `lat`/`lon` only pick the weather; driving
+The demo farm is 10,000 acres of real field parcels around Elveden, Suffolk, in 8 blocks: the
+centres of the blocks in `webapp/data/demo_farm.geojson`. They're up to 17 km apart, so they fall
+in different 2 km grid cells and get slightly different weather. Their `lat`/`lon` only pick the weather; driving
 times come from `travel_hours`.
 
 ## Format

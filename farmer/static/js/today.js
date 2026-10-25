@@ -6,7 +6,7 @@ import { farmForecast, nowIndex, weatherWord } from "./weather-data.js";
 
 const { farm, season } = await load();
 const clock = makeClock(farm);
-topbar(farm, "index.html", clock);
+topbar(farm, "today.html", clock);
 const totalHa = farm.fields.reduce((sum, field) => sum + field.area_ha, 0);
 
 let weather = null; // the real forecast at the farm, once it arrives

@@ -30,7 +30,9 @@ def farm():
     plan = demo_state.plan()
     params, _, _ = demo_state.season()
     site = settings()
-    corners = np.concatenate([np.array(field["outline"]) for field in base["fields"]])  # [lat, lng]
+    corners = np.concatenate(  # [corner, 2] lat, lng: every parcel's outer ring
+        [np.array(parcel[0]) for field in base["fields"] for parcel in field["outline"]]
+    )
     return {
         "name": site["farm_name"],
         "place": site["place"],

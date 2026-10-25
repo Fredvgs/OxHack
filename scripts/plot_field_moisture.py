@@ -22,9 +22,9 @@ from plot_drying_cost import MUTED, SURFACE  # noqa: E402
 from plot_field_values import plot_per_field  # noqa: E402
 
 from harvest.forecast import load_moisture  # noqa: E402
-from run import MOISTURE_CSV  # noqa: E402
 
 OUTPUT = ROOT / "outputs" / "field_moisture.png"
+MOISTURE_CSV = ROOT / "outputs" / "moisture_forecast.csv"
 
 
 def main():

@@ -2,8 +2,7 @@
 
 The line is the expected £/ha that the planner sees (field_values, averaged over members). The
 band shows how much the forecast members disagree. 0 means "can't harvest" (rain or too wet).
-Moisture comes from outputs/moisture_forecast.csv; make it first with
-`uv run python scripts/moisture_forecast.py`.
+Moisture comes from the moisture model, run from each field's starting moisture, as run.py does.
 Run:  uv run python scripts/plot_field_values.py
 """
 
@@ -21,7 +20,7 @@ from plot_drying_cost import BLUE, MUTED, SURFACE, TEXT, style  # noqa: E402
 
 from harvest.forecast import load_forecast  # noqa: E402
 from harvest.value import field_values, start_moisture  # noqa: E402
-from run import FORECAST_CSV, MOISTURE_CSV  # noqa: E402
+from run import FORECAST_CSV  # noqa: E402
 
 OUTPUT = ROOT / "outputs" / "field_values.png"
 BAND_PCT = (10, 90)  # members between these percentiles are shaded
@@ -98,7 +97,7 @@ def plot_per_field(per_member, params, title, ylabel, pick_best, best_label):
 
 def main():
     params = yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))
-    weather = load_forecast(FORECAST_CSV, params, MOISTURE_CSV)
+    weather = load_forecast(FORECAST_CSV, params)
     per_member = values_per_member(weather, params)  # [member, field, hour]
     fig, axes = plot_per_field(
         per_member,

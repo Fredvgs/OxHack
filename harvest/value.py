@@ -12,14 +12,18 @@ def start_moisture(weather, params):
     """Grain moisture (%) of every field at hour 0.
 
     From the moisture forecast (weather["moisture_pct"], averaged over members) when it is
-    loaded, otherwise the same placeholder, temp_start_moisture_pct, for every field.
+    loaded, otherwise the start_moisture_pct of each field's crop in params["moisture_model"]
+    (placeholders until there is a real reading).
 
     weather: {name: [member, field, hour]}  forecast
     returns: [field]                        grain moisture at hour 0, %
     """
     if "moisture_pct" in weather:
         return weather["moisture_pct"][:, :, 0].mean(axis=0)
-    return np.full(len(params["fields"]), float(params["temp_start_moisture_pct"]))
+    crops = params["moisture_model"]["crops"]
+    return np.array(
+        [crops[field["crop"]]["start_moisture_pct"] for field in params["fields"]], dtype=float
+    )
 
 
 def predict_moisture(start_moisture, weather, params):

@@ -25,13 +25,16 @@ Reads the prediction data.
 |---|---|---|---|
 | in | `path` | file path | the CSV (format in `data/README.md`) |
 | in | `params` | dict | uses `params["fields"]` for the field order |
-| out | `weather` | dict of 2 arrays | `weather["rain_mm"]`: `[M, F, H]` rain per hour, mm |
+| out | `weather` | dict of 3 arrays | `weather["rain_mm"]`: `[M, F, H]` rain per hour, mm |
 | | | | `weather["humidity_pct"]`: `[M, F, H]` relative humidity, % |
+| | | | `weather["temp_c"]`: `[M, F, H]` air temperature, °C (lets `predict_moisture` re-run the moisture model from each reading) |
 
 Optional third input **`moisture_path`**: `outputs/moisture_forecast.csv` (written by
 `scripts/moisture_forecast.py`). Adds `weather["moisture_pct"]`: `[M, F, H]` grain moisture
-(% wet basis, end of each hour), and the value function then uses it (see below). `run.py`
-passes it. It must come from the same `forecast.csv`, or loading stops with an error.
+(% wet basis, end of each hour), and the value function then slides those curves to each reading
+instead of re-running the model (see below). `run.py` no longer passes it: sliding a curve worked
+out from a different starting moisture gives the wrong shape. It must come from the same
+`forecast.csv`, or loading stops with an error.
 
 Also **`load_moisture(path, params)`**: reads just that CSV, out `[M, F, H]`, each field taking the
 column of its own crop. Feed it to `drying_cost_gbp_per_t` (see `scripts/plot_drying_cost.py`).
@@ -50,10 +53,11 @@ The value function: what is a field worth if we harvest it in a given hour?
 Uses a helper, **`predict_moisture(start_moisture, weather, params)`**:
 in `[F]` and `[M, F, H]`, out `[M, F, H]` grain moisture (%) each hour.
 The simulator also uses it to get the "true" moisture that the sensor reads.
-With `weather["moisture_pct"]` it takes the moisture forecast, shifted so each member starts at
-the latest reading (keeping that member's hour-to-hour change). With `weather["temp_c"]` (the past
-forecasts of `replay.py`) it runs the grain moisture model of `moisture.py` from the reading.
-Without either, a simple model (dries with low humidity, wets with rain).
+With `weather["temp_c"]` (`run.py`, and the past forecasts of `replay.py`) it runs the grain
+moisture model of `moisture.py` from the reading. With `weather["moisture_pct"]` instead (only when
+a moisture CSV is passed to `load_forecast`) it slides each member's precomputed curve to start at
+the reading, keeping its hour-to-hour change; that is only right if the curve started near the
+reading. Without either, a simple model (dries with low humidity, wets with rain).
 
 And **`member_values(...)`**: same inputs, out `[M, F, H]`, the value in each member before
 averaging. `field_values` is its average over members.
@@ -70,8 +74,9 @@ every hour the crop has stood, and 0 in rain or when too wet to combine.
 - Value peaks at 14-14.5% for cereals and 9% for oilseed rape, and falls on both sides.
 
 And **`start_moisture(weather, params)`**: in `[M, F, H]`, out `[F]` grain moisture (%) of each
-field at hour 0: hour 0 of `weather["moisture_pct"]` averaged over members, or the placeholder
-`temp_start_moisture_pct` for every field when there is no moisture forecast.
+field at hour 0: hour 0 of `weather["moisture_pct"]` averaged over members, or otherwise (`run.py`,
+`replay.py`) the `start_moisture_pct` of each field's crop under `moisture_model` in `params.yaml`
+(placeholders until there is a real reading).
 
 ## 3. `planners/`: `plan_*(value, state, params)`
 
@@ -183,9 +188,9 @@ precipitation (rain, showers and snow), so the forecasts and the real weather ma
 
 A physically based model of grain moisture for wheat, barley and oilseed rape (`"osr"`). It reads
 `temp_c`, `humidity_pct` and `rain_mm` straight from the forecast CSV.
-`scripts/moisture_forecast.py` saves the result to `outputs/moisture_forecast.csv`, which the
-pipeline reads through `load_forecast(..., moisture_path=...)`. `predict_moisture` runs it directly when the forecast has
-temperature (past dates: `replay.py`, `compare.py`). All constants, including each crop's starting moisture
+The pipeline runs it through `predict_moisture`, from every moisture reading, because the forecast
+has temperature (`run.py`, `replay.py`, `compare.py`). `scripts/moisture_forecast.py` also saves a
+run from the starting moistures to `outputs/moisture_forecast.csv`, for the plots. All constants, including each crop's starting moisture
 (`start_moisture_pct`, placeholders for now), are in `params.yaml` under `moisture_model`, with
 sources. To use the official ASABE D245.7 Henderson constants, replace `henderson_k/c/n` there.
 

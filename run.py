@@ -3,7 +3,8 @@
 uv run python run.py
 
 The forecast is data/forecast.csv (uv run python data/download_forecast.py for a fresh one); one
-of its members plays the weather that really happens. Past days: replay.py and compare.py.
+of its members plays the weather that really happens. Grain moisture comes from the moisture model
+(harvest/moisture.py), re-run from every reading. Past days: replay.py and compare.py.
 """
 
 from pathlib import Path
@@ -19,14 +20,11 @@ from harvest.simulate import activities, run_season
 
 ROOT = Path(__file__).parent
 FORECAST_CSV = ROOT / "data" / "forecast.csv"
-MOISTURE_CSV = (
-    ROOT / "outputs" / "moisture_forecast.csv"
-)  # make it: uv run python scripts/moisture_forecast.py
 
 
 def main():
     params = yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))
-    weather = load_forecast(FORECAST_CSV, params, MOISTURE_CSV)
+    weather = load_forecast(FORECAST_CSV, params)  # with temp_c: moisture model from each reading
     result = run_season(weather, params)
     print_results(result, params)
     plot_results(result, params)

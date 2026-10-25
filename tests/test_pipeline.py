@@ -39,6 +39,17 @@ def demo_params():
     return yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))
 
 
+def start_every_crop_at(params, pct):
+    """Hour-0 grain moisture (%) of every crop in params["crops"], for the hand-made farms.
+
+    Only start_moisture_pct is set: these farms have no temperature, so the moisture model never
+    runs; predict_moisture uses its simple humidity/rain model instead.
+    """
+    params["moisture_model"]["crops"] = {
+        crop: {"start_moisture_pct": pct} for crop in params["crops"]
+    }
+
+
 def tiny_farm():
     """Hand-made case where we know the answer.
 
@@ -56,7 +67,6 @@ def tiny_farm():
         forecast_every_hours=4,
         loss_pct_per_hour=0,
         drying_pct_per_hour=0,
-        temp_start_moisture_pct=14,
         crops={
             "cheap": {
                 "price_gbp_per_t": 50,
@@ -78,6 +88,7 @@ def tiny_farm():
         machines=[{"name": "m0", "ha_per_hour": 1, "start": "f0"}],
         travel_hours=[[0, 2, 2], [2, 0, 2], [2, 2, 0]],
     )
+    start_every_crop_at(params, 14)
     dry_weather = {
         "rain_mm": np.zeros((2, 2, 4)),  # [member, field, hour]
         "humidity_pct": np.full((2, 2, 4), 60.0),
@@ -104,7 +115,6 @@ def rain_farm():
         forecast_every_hours=3,
         loss_pct_per_hour=0,
         drying_pct_per_hour=1,
-        temp_start_moisture_pct=16,
         crops={
             "grain": {
                 "price_gbp_per_t": 100,
@@ -120,6 +130,7 @@ def rain_farm():
         machines=[{"name": "m0", "ha_per_hour": 1, "start": "depot"}],
         travel_hours=np.zeros((3, 3)).tolist(),
     )
+    start_every_crop_at(params, 16)
     rain = np.zeros((2, 2, 3))  # [member, field, hour]
     rain[:, :, 2] = 1.0
     weather = {"rain_mm": rain, "humidity_pct": np.zeros((2, 2, 3))}  # bone-dry air
@@ -262,6 +273,19 @@ def test_value_uses_moisture_forecast_shifted_to_the_reading():
     # 13%: no drying charge, but the 1 t quoted at 14% weighs only 0.86/0.87 t this dry
     assert value[1, 3] == pytest.approx(200 * 0.86 / 0.87)
     assert value[1, 0] < value[1, 3]  # wetter grain costs more to dry
+
+
+def test_live_forecast_runs_the_moisture_model_from_each_crops_start():
+    params = demo_params()
+    weather = load_forecast(ROOT / "data" / "forecast.csv", params)
+    assert weather["temp_c"].shape == weather["rain_mm"].shape  # so predict_moisture re-runs it
+    assert "moisture_pct" not in weather
+    crops = params["moisture_model"]["crops"]
+    starts = [crops[field["crop"]]["start_moisture_pct"] for field in params["fields"]]
+    assert start_moisture(weather, params) == pytest.approx(starts)
+    moisture = predict_moisture(start_moisture(weather, params), weather, params)
+    assert moisture[:, :, 0] == pytest.approx(np.tile(starts, (moisture.shape[0], 1)))
+    assert moisture.max() <= 100 * 0.52 / 1.52 + 1e-9  # never above the rain cap (rain_max_mc)
 
 
 def test_moisture_csv_must_match_the_forecast():

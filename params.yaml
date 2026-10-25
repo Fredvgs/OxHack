@@ -72,7 +72,6 @@ crops:
 # (https://www.camgrain.co.uk/charges-for-2025). The drying target and the free level are per crop
 # (target_moisture_pct, free_drying_up_to_pct under crops: above); the oilseed values come from the
 # same Camgrain page. The band, the charge per band and the weight deduction are the same for both.
-temp_start_moisture_pct: 18        # TODO: replace with the moisture model's hour 0
 weight_loss_pct_per_pct: 1.25      # weight deducted per point dried
 drying_band_pct: 0.5
 drying_charge_gbp_per_band: 2.0    # per tonne
@@ -125,7 +124,8 @@ moisture_model:
   rain_max_mc: 0.52                # ~34% wet basis
   rain_threshold_mm: 0.3           # our choice, not from the paper
   # EMC (modified Henderson) fitted to the PAMI charts; drying rate (Lewis, Arrhenius) from
-  # Noroña et al. dryer tests at 40-60 °C. start_moisture_pct (% wet basis) are placeholders.
+  # Noroña et al. dryer tests at 40-60 °C. start_moisture_pct (% wet basis): every field's grain
+  # moisture at hour 0 in run.py and replay.py, by crop. Placeholders until there is a real reading.
   crops:
     wheat:  {henderson_k: 2.2846e-5, henderson_c: 55.990,  henderson_n: 2.2876,
              k_ref_per_hour: 0.1255, t_ref_c: 40, ea_j_per_mol: 50630, start_moisture_pct: 10,

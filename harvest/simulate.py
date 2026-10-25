@@ -6,6 +6,10 @@ plan. Machines follow the latest plan. This file (not the planner) handles drivi
 actually gets harvested, on the weather that really happens, and what running the combines costs
 (running_costs in params.yaml).
 
+It also keeps each combine's fuel tank, a layer above the planners: it burns the diesel each hour
+of cutting and driving, refills at the depot, sends a combine home when its tank runs low whatever
+the plan says, and passes the fuel left to the planner as telemetry (state["fuel_litres"]).
+
 Two ways in:
 - run_season: one fixed forecast; one of its members plays the weather that really happens.
 - run_with_forecasts: the real weather, and a function that gives the newest forecast at any hour
@@ -63,6 +67,7 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
         "place":        [machine, hour]  where each machine is, or is driving to: field index,
                                          or number of fields = the depot
         "driving":      [machine, hour]  True while the machine is on the road
+        "fuel_litres":  [machine, hour]  diesel left in each tank at the end of each hour
         "remaining_ha": [field]          area left standing at the end
         "plans":        one per replan: {"hour", "value" [field, hour], "schedule" [machine, hour]}
     }
@@ -75,8 +80,13 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
     true_moisture = predict_moisture(first_moisture, truth, params)[0]  # [field, hour]
     true_value = field_values(truth, first_moisture, params)  # [field, hour]
     travel = np.ceil(np.array(params["travel_hours"])).astype(int)  # [field+1, field+1] int hours
+    depot = len(fields)  # int, place index of the depot
+    litres = params["running_costs"]  # what cutting and driving burn
 
     remaining = np.array([field["area_ha"] for field in fields], dtype=float)  # [field] ha
+    tank = np.array([m["fuel_tank_litres"] for m in machines], dtype=float)  # [machine] litres
+    fuel = tank.copy()  # [machine] litres in each tank now: every combine starts full
+    fuel_litres = np.zeros((len(machines), n_hours))  # [machine, hour] left at the end of each hour
     machine_at = np.array(  # [machine] int field index, len(fields) = depot
         [len(fields) if m["start"] == "depot" else names.index(m["start"]) for m in machines]
     )
@@ -109,6 +119,7 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
                 "remaining_ha": remaining.copy(),
                 "machine_at": machine_at.copy(),
                 "value_by_member": by_member,  # optional extra; only plan_mpc uses it
+                "fuel_litres": fuel.copy(),  # telemetry from the tanks; no planner uses it yet
             }
             schedule = planner(value, state, params)  # [machine, plan_hour] field index or WAIT
             plans.append({"hour": hour, "value": value, "schedule": schedule})
@@ -116,6 +127,11 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
 
         for m, machine in enumerate(machines):  # int, dict
             target = schedule[m, hour - plan_start]  # int field index or WAIT
+            here = machine_at[m]  # int, where it is or is driving to
+            going_to = here if target == WAIT else target  # int
+            on_the_road = hour < arrives_at[m]  # bool, a trip once started is always finished
+            if not on_the_road and must_refuel(fuel[m], here, going_to, machine, travel, params):
+                target = depot  # the fuel gauge overrules the plan
             if hour >= arrives_at[m] and target != WAIT and target != machine_at[m]:
                 arrives_at[m] = hour + travel[machine_at[m], target]  # start driving
                 machine_at[m] = target
@@ -129,6 +145,14 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
                 harvesting[m, hour] = target
             place[m, hour] = machine_at[m]
             driving[m, hour] = hour < arrives_at[m]
+            # the same litres running_costs_gbp charges for; waiting in a field burns nothing
+            fuel[m] -= (
+                cut_ha[m, hour] * litres["cutting_diesel_litres_per_ha"]
+                + driving[m, hour] * litres["road_diesel_litres_per_hour"]
+            )
+            if machine_at[m] == depot and not driving[m, hour]:  # parked at the depot: fill up
+                fuel[m] = min(tank[m], fuel[m] + params["depot_refuel_litres_per_hour"])
+            fuel_litres[m, hour] = fuel[m]
 
     costs = running_costs_gbp(cut_ha, driving, place, params)  # {item: [machine, hour] £}
     running_cost = sum(costs.values())  # [machine, hour] £
@@ -142,9 +166,38 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
         "harvesting": harvesting,
         "place": place,
         "driving": driving,
+        "fuel_litres": fuel_litres,
         "remaining_ha": remaining,
         "plans": plans,
     }
+
+
+def must_refuel(fuel_litres, here, going_to, machine, travel, params):
+    """Should a combine head to the depot now, whatever the plan says?
+
+    Yes if the tank can't cover the trip to where the plan sends it, an hour of cutting there,
+    and the drive home, with fuel_reserve_pct of the tank still left on reaching the depot.
+    Checked every hour the combine isn't on the road, so (given a tank that can get it home from
+    where it starts) it never runs dry in a field. The planners don't plan refuelling yet.
+
+    fuel_litres: float  diesel in the tank now
+    here:        int    where it is: field index, or number of fields = the depot
+    going_to:    int    where the plan sends it (here when it's told to WAIT)
+    machine:     dict   one entry of params["machines"]
+    travel:      [field+1, field+1] int hours
+    returns:     bool
+    """
+    depot = len(travel) - 1
+    if going_to == depot:
+        return False  # going home anyway
+    litres = params["running_costs"]
+    road_hours = travel[here, going_to] + travel[going_to, depot]  # there, then home
+    needed = (
+        road_hours * litres["road_diesel_litres_per_hour"]
+        + machine["ha_per_hour"] * litres["cutting_diesel_litres_per_ha"]  # an hour of cutting
+        + machine["fuel_tank_litres"] * params["fuel_reserve_pct"] / 100
+    )
+    return fuel_litres < needed
 
 
 def activities(cut_ha, driving, place, n_fields):

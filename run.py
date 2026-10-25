@@ -46,12 +46,14 @@ def print_results(result, params):
     print()
     # {activity: [machine, hour] bool}
     doing = activities(result["cut_ha"], result["driving"], result["place"], len(params["fields"]))
-    print(
-        f"{'machine':<15}" + "".join(f"{name + ' h':>11}" for name in doing) + f"{'cost GBP':>11}"
-    )
+    activity_columns = "".join(f"{name + ' h':>11}" for name in doing)
+    print(f"{'machine':<15}{activity_columns}{'cost GBP':>11}{'refuels':>9}{'fuel l':>8}")
     for m, machine in enumerate(params["machines"]):
         hours = "".join(f"{doing[name][m].sum():>11}" for name in doing)  # one column per activity
-        print(f"{machine['name']:<15}{hours}{result['running_cost_gbp'][m].sum():>11,.0f}")
+        cost = result["running_cost_gbp"][m].sum()  # £
+        fuel = result["fuel_litres"][m]  # [hour] litres
+        refuels = (np.diff(fuel) > 0).sum()  # hours the tank was filled at the depot
+        print(f"{machine['name']:<15}{hours}{cost:>11,.0f}{refuels:>9}{fuel[-1]:>8,.0f}")
 
 
 def plot_results(result, params, start=None, marked_hours=None):

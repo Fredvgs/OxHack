@@ -7,7 +7,8 @@ Each planner replays the same days as replay.py does: the forecasts that were re
 the weather that really happened (needs internet the first time, see harvest/past_data.py).
 Every `plan_*` function listed in `__all__` in harvest/planners/__init__.py is picked up
 automatically, so a new planner shows up here as soon as you add it there. Each planner gets the
-standard run.py window, then one extra window puts them all side by side. Planners are ranked by
+standard run.py window, then one window puts them all side by side and another shows each one's
+fuel in every combine's tank over time. Planners are ranked by
 net £: money earned minus running costs (running_costs in params.yaml), the same for every planner.
 """
 
@@ -56,6 +57,7 @@ def main():
         fig.canvas.manager.set_window_title(name)
         fig.tight_layout()
     plot_comparison(results, first_hour, new_runs)
+    plot_fuel(results, params, first_hour, new_runs)
     plt.show()
 
 
@@ -114,6 +116,40 @@ def plot_comparison(results, start, marked_hours):
 
     for ax in (top, bottom):
         ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    return fig
+
+
+def plot_fuel(results, params, start, marked_hours):
+    """Diesel in each combine's tank over the season, one chart per planner, in one window.
+
+    Each line drops while the combine cuts or drives and jumps back up when it refuels at the
+    depot. Shown as % of each tank, so the one dotted line is every combine's reserve
+    (fuel_reserve_pct), which the simulator never lets a tank go below.
+
+    start:        Timestamp of hour 0, to label the hour axis with dates
+    marked_hours: hours to mark with a dashed line (a new forecast run)
+    """
+    machines = params["machines"]
+    tank = np.array([machine["fuel_tank_litres"] for machine in machines])  # [machine] litres
+    height = 2 * len(results) + 1  # inches: 2 per planner, plus room for the title
+    fig, axes = plt.subplots(len(results), 1, figsize=(10, height), sharex=True, squeeze=False)
+    axes = axes[:, 0]  # [planner] one chart each
+    fig.canvas.manager.set_window_title("Fuel by planner")
+
+    for ax, (name, result) in zip(axes, results.items()):
+        fuel_pct = 100 * result["fuel_litres"] / tank[:, None]  # [machine, hour] % of the tank
+        for m, machine in enumerate(machines):
+            ax.plot(fuel_pct[m], linewidth=1.2, label=machine["name"])
+        ax.axhline(params["fuel_reserve_pct"], color=GREY, linestyle=":", linewidth=1)
+        ax.set_ylim(0, 105)
+        ax.set_ylabel("% of tank")
+        ax.set_title(name, loc="left")
+        ax.spines[["top", "right"]].set_visible(False)
+        mark_new_forecasts(ax, result, marked_hours)
+    axes[0].legend(frameon=False, ncol=len(machines), loc="lower right")
+    label_dates(axes[-1], start, len(result["earned_gbp"]))
+    fig.suptitle("Diesel in each tank (dotted = reserve, dashed = a new forecast run)")
     fig.tight_layout()
     return fig
 

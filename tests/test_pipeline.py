@@ -13,6 +13,7 @@ from harvest.planners.common import follow_plan, send_idle_to_depot
 from harvest.planners.lagrangian import field_alone, machine_prices
 from harvest.simulate import run_season, run_with_forecasts
 from harvest.value import (
+    delivered_tonnes_per_ha,
     drying_cost_gbp_per_t,
     field_values,
     member_values,
@@ -24,15 +25,37 @@ ROOT = Path(__file__).parent.parent
 MOISTURE_CSV = ROOT / "outputs" / "moisture_forecast.csv"
 
 
+# Camgrain cereal drying terms (dry to 14%, free up to 15%) for the hand-made crops below
+CEREAL_DRYING = {"target_moisture_pct": 14.0, "free_drying_up_to_pct": 15.0}
+
+# rain_farm: hour 0 at 16%, where its yield is quoted; hour 1 at 15%, where the same dry matter
+# weighs 84/85 as much and the store keeps 1.25% of it
+RAIN_FARM_HOUR_0 = 93.5
+RAIN_FARM_HOUR_1 = 98.75 * 0.84 / 0.85  # £97.59/ha
+RAIN_FARM_BEST = RAIN_FARM_HOUR_0 + RAIN_FARM_HOUR_1  # £191.09
+
+
 def demo_params():
     return yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))
+
+
+def start_every_crop_at(params, pct):
+    """Hour-0 grain moisture (%) of every crop in params["crops"], for the hand-made farms.
+
+    Only start_moisture_pct is set: these farms have no temperature, so the moisture model never
+    runs; predict_moisture uses its simple humidity/rain model instead.
+    """
+    params["moisture_model"]["crops"] = {
+        crop: {"start_moisture_pct": pct} for crop in params["crops"]
+    }
 
 
 def tiny_farm():
     """Hand-made case where we know the answer.
 
     One machine starts at field 0. Four dry hours. Driving between fields takes 2 hours.
-    Field 0: 4 ha worth £50/ha. Field 1: 2 ha worth £80/ha. The machine cuts 1 ha per hour.
+    Field 0: 4 ha worth £50/ha. Field 1: 2 ha worth £80/ha (grain stays at 14%, where the 1 t/ha
+    yield is quoted, so it weighs exactly 1 t). The machine cuts 1 ha per hour.
     Staying on field 0 earns 4 x £50 = £200 (the best possible).
     Driving to field 1 earns 2 x £80 = £160 (2 hours lost to driving).
     """
@@ -44,10 +67,19 @@ def tiny_farm():
         forecast_every_hours=4,
         loss_pct_per_hour=0,
         drying_pct_per_hour=0,
-        temp_start_moisture_pct=14,
         crops={
-            "cheap": {"price_gbp_per_t": 50, "yield_t_per_ha": 1},
-            "dear": {"price_gbp_per_t": 80, "yield_t_per_ha": 1},
+            "cheap": {
+                "price_gbp_per_t": 50,
+                "yield_t_per_ha": 1,
+                "yield_moisture_pct": 14,
+                **CEREAL_DRYING,
+            },
+            "dear": {
+                "price_gbp_per_t": 80,
+                "yield_t_per_ha": 1,
+                "yield_moisture_pct": 14,
+                **CEREAL_DRYING,
+            },
         },
         fields=[
             {"name": "f0", "crop": "cheap", "area_ha": 4},
@@ -56,6 +88,7 @@ def tiny_farm():
         machines=[{"name": "m0", "ha_per_hour": 1, "start": "f0"}],
         travel_hours=[[0, 2, 2], [2, 0, 2], [2, 2, 0]],
     )
+    start_every_crop_at(params, 14)
     dry_weather = {
         "rain_mm": np.zeros((2, 2, 4)),  # [member, field, hour]
         "humidity_pct": np.full((2, 2, 4), 60.0),
@@ -67,11 +100,12 @@ def rain_farm():
     """Hand-made case where waiting for each field's best hour is a trap.
 
     One machine at the depot cuts 1 ha per hour; no driving time. Two 1 ha fields of the same
-    crop at £100/t, 1 t/ha. The grain dries from 16% to 15% by hour 1, then it rains in hour 2.
-    Value of each field: hour 0 £93.50/ha (£4 drying charge + 2.5% weight kept), hour 1 £98.75/ha
-    (1.25% weight kept), hour 2 nothing.
-    Best: one field now and the other in hour 1, £192.25. Both fields' best hour is hour 1, so a
-    planner that waits for it cuts only one field: £98.75.
+    crop at £100/t, 1 t/ha quoted at 16%. The grain dries from 16% to 15% by hour 1, then it rains
+    in hour 2. Value of each field: hour 0 £93.50/ha (1 t, less a £4 drying charge and 2.5% weight
+    kept), hour 1 £97.59/ha (84/85 t, as drier grain weighs less, less 1.25% weight kept), hour 2
+    nothing.
+    Best: one field now and the other in hour 1, £191.09. Both fields' best hour is hour 1, so a
+    planner that waits for it cuts only one field: £97.59.
     """
     params = demo_params()
     params.update(
@@ -81,8 +115,14 @@ def rain_farm():
         forecast_every_hours=3,
         loss_pct_per_hour=0,
         drying_pct_per_hour=1,
-        temp_start_moisture_pct=16,
-        crops={"grain": {"price_gbp_per_t": 100, "yield_t_per_ha": 1}},
+        crops={
+            "grain": {
+                "price_gbp_per_t": 100,
+                "yield_t_per_ha": 1,
+                "yield_moisture_pct": 16,
+                **CEREAL_DRYING,
+            }
+        },
         fields=[
             {"name": "f0", "crop": "grain", "area_ha": 1},
             {"name": "f1", "crop": "grain", "area_ha": 1},
@@ -90,6 +130,7 @@ def rain_farm():
         machines=[{"name": "m0", "ha_per_hour": 1, "start": "depot"}],
         travel_hours=np.zeros((3, 3)).tolist(),
     )
+    start_every_crop_at(params, 16)
     rain = np.zeros((2, 2, 3))  # [member, field, hour]
     rain[:, :, 2] = 1.0
     weather = {"rain_mm": rain, "humidity_pct": np.zeros((2, 2, 3))}  # bone-dry air
@@ -162,7 +203,10 @@ def test_value_has_one_number_per_field_and_hour():
 def test_drying_cost_follows_camgrain_bands():
     params = demo_params()
     params["fields"] = [{"name": "f0", "crop": "free"}, {"name": "f1", "crop": "dear"}]
-    params["crops"] = {"free": {"price_gbp_per_t": 0}, "dear": {"price_gbp_per_t": 200}}
+    params["crops"] = {
+        "free": {"price_gbp_per_t": 0, **CEREAL_DRYING},
+        "dear": {"price_gbp_per_t": 200, **CEREAL_DRYING},
+    }
     moisture = np.array([[[14.0, 15.0, 15.1, 15.5, 15.6, 16.0]] * 2])  # [member, field, hour]
     cost = drying_cost_gbp_per_t(moisture, params)
     assert cost[0, 0] == pytest.approx([0, 0, 2, 2, 4, 4])  # price 0 leaves only the charge
@@ -187,6 +231,37 @@ def test_moisture_csv_gives_each_field_its_own_crop(tmp_path):
     assert drying_cost_gbp_per_t(moisture, params).shape == (2, 2, 3)
 
 
+def test_drier_grain_weighs_less_and_wetter_grain_more():
+    params = demo_params()
+    params["fields"] = [{"name": "f0", "crop": "grain"}]
+    params["crops"] = {"grain": {"yield_t_per_ha": 10, "yield_moisture_pct": 15, **CEREAL_DRYING}}
+    moisture = np.array([[[10.0, 15.0, 20.0]]])  # [member, field, hour]
+    # 10 t at 15% is 8.5 t of dry matter, whatever the moisture
+    assert delivered_tonnes_per_ha(moisture, params)[0, 0] == pytest.approx(
+        [8.5 / 0.90, 10, 8.5 / 0.80]
+    )
+
+
+def test_oilseeds_are_dried_to_9_pct_and_cereals_to_14():
+    params = demo_params()
+    params["fields"] = [{"name": "f0", "crop": "cereal"}, {"name": "f1", "crop": "oilseed"}]
+    params["crops"] = {
+        "cereal": {"price_gbp_per_t": 100, **CEREAL_DRYING},
+        "oilseed": {
+            "price_gbp_per_t": 100,
+            "target_moisture_pct": 9.0,
+            "free_drying_up_to_pct": 9.0,
+        },
+    }
+    moisture = np.array([[[9.0, 10.0, 15.0], [9.0, 10.0, 15.0]]])  # [member, field, hour]
+    cost = drying_cost_gbp_per_t(moisture, params)
+    assert cost[0, 0] == pytest.approx(
+        [0, 0, 1.25]
+    )  # cereal: free up to 15%, weight kept above 14%
+    # oilseed: free at 9%; at 10%, 2 bands (£4) + 1 point x 1.25% of £100 kept
+    assert cost[0, 1, :2] == pytest.approx([0, 4 + 1.25])
+
+
 def test_value_uses_moisture_forecast_shifted_to_the_reading():
     params, weather = tiny_farm()
     params["crops"]["dear"]["price_gbp_per_t"] = 200
@@ -195,8 +270,22 @@ def test_value_uses_moisture_forecast_shifted_to_the_reading():
     assert start_moisture(weather, params) == pytest.approx([18, 18])
     # a reading of 16% keeps the same drying, just 2 points lower: 16, 15, 14, 13
     value = field_values(weather, np.array([16.0, 16.0]), params)
-    assert value[1, 3] == pytest.approx(200)  # 13% is dry enough to cost nothing
+    # 13%: no drying charge, but the 1 t quoted at 14% weighs only 0.86/0.87 t this dry
+    assert value[1, 3] == pytest.approx(200 * 0.86 / 0.87)
     assert value[1, 0] < value[1, 3]  # wetter grain costs more to dry
+
+
+def test_live_forecast_runs_the_moisture_model_from_each_crops_start():
+    params = demo_params()
+    weather = load_forecast(ROOT / "data" / "forecast.csv", params)
+    assert weather["temp_c"].shape == weather["rain_mm"].shape  # so predict_moisture re-runs it
+    assert "moisture_pct" not in weather
+    crops = params["moisture_model"]["crops"]
+    starts = [crops[field["crop"]]["start_moisture_pct"] for field in params["fields"]]
+    assert start_moisture(weather, params) == pytest.approx(starts)
+    moisture = predict_moisture(start_moisture(weather, params), weather, params)
+    assert moisture[:, :, 0] == pytest.approx(np.tile(starts, (moisture.shape[0], 1)))
+    assert moisture.max() <= 100 * 0.52 / 1.52 + 1e-9  # never above the rain cap (rain_max_mc)
 
 
 def test_moisture_csv_must_match_the_forecast():
@@ -316,13 +405,17 @@ def test_prices_rise_on_the_hour_everyone_wants():
     value = field_values(weather, start_moisture(weather, params), params)
     price, bound = machine_prices(value, np.array([1.0, 1.0]), params)
     # hour 1 must cost about £5.25/ha more than hour 0, so one field takes hour 0 instead
-    assert price[1] - price[0] == pytest.approx(98.75 - 93.5, abs=0.5)
-    assert bound == pytest.approx(192.25, abs=0.5)  # the best answer: the bound is tight here
+    assert price[1] - price[0] == pytest.approx(RAIN_FARM_HOUR_1 - RAIN_FARM_HOUR_0, abs=0.5)
+    assert bound == pytest.approx(
+        RAIN_FARM_BEST, abs=0.5
+    )  # the best answer: the bound is tight here
 
 
 def test_lagrangian_cuts_before_the_rain():
     params, weather = rain_farm()
-    assert run_season(weather, params, plan_lagrangian)["total_gbp"] == pytest.approx(192.25)
+    assert run_season(weather, params, plan_lagrangian)["total_gbp"] == pytest.approx(
+        RAIN_FARM_BEST
+    )
 
 
 def test_lagrangian_finds_the_best_answer_on_the_tiny_farm():
@@ -337,7 +430,7 @@ def test_mpc_finds_the_best_answer_on_the_tiny_farm():
 
 def test_mpc_cuts_before_the_rain():
     params, weather = rain_farm()
-    assert run_season(weather, params, plan_mpc)["total_gbp"] == pytest.approx(192.25)
+    assert run_season(weather, params, plan_mpc)["total_gbp"] == pytest.approx(RAIN_FARM_BEST)
 
 
 def test_mpc_leaves_a_field_mid_job_and_comes_back():

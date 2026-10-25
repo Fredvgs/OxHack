@@ -145,7 +145,11 @@ def plan():
         },
         "limits": {
             "too_wet_pct": params["max_harvest_moisture_pct"],
-            "free_drying_pct": params["free_drying_up_to_pct"],
+            # per crop since drying moved under crops: in params.yaml, so one per field
+            "free_drying_pct": [
+                params["crops"][field["crop"]]["free_drying_up_to_pct"]
+                for field in params["fields"]
+            ],  # [field]
             "rain_mm": params["rain_limit_mm"],
             "rain_chance_pct": demo["rain_chance_pct"],
             "sensor_every_hours": params["sensor_every_hours"],
@@ -160,7 +164,8 @@ def plan():
         "true_rain_mm": np.round(run["true_rain_mm"], 1).tolist(),  # [field][hour]
         "true_humidity_pct": np.round(run["true_humidity_pct"]).tolist(),  # [field][hour]
         # one colour scale for the whole season, so colours compare across replans
-        "value_max_gbp_per_ha": float(max(plan["value"].max() for plan in run["plans"])),
+        # rounded like value_gbp_per_ha below, so no rounded value is above it
+        "value_max_gbp_per_ha": float(np.round(max(plan["value"].max() for plan in run["plans"]))),
         "plans": [
             {
                 "hour": plan["hour"],

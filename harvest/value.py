@@ -12,14 +12,18 @@ def start_moisture(weather, params):
     """Grain moisture (%) of every field at hour 0.
 
     From the moisture forecast (weather["moisture_pct"], averaged over members) when it is
-    loaded, otherwise the same placeholder, temp_start_moisture_pct, for every field.
+    loaded, otherwise the start_moisture_pct of each field's crop in params["moisture_model"]
+    (placeholders until there is a real reading).
 
     weather: {name: [member, field, hour]}  forecast
     returns: [field]                        grain moisture at hour 0, %
     """
     if "moisture_pct" in weather:
         return weather["moisture_pct"][:, :, 0].mean(axis=0)
-    return np.full(len(params["fields"]), float(params["temp_start_moisture_pct"]))
+    crops = params["moisture_model"]["crops"]
+    return np.array(
+        [crops[field["crop"]]["start_moisture_pct"] for field in params["fields"]], dtype=float
+    )
 
 
 def predict_moisture(start_moisture, weather, params):
@@ -72,23 +76,39 @@ def crop_numbers(params, key):
     return np.array([crop[key] for crop in crops], dtype=float)[None, :, None]
 
 
+def delivered_tonnes_per_ha(moisture, params):
+    """Tonnes per ha as weighed at this grain moisture (%).
+
+    yield_t_per_ha is quoted at yield_moisture_pct. Dry matter is fixed; water changes the weight.
+    UK terms pay no bonus for grain drier than that (Openfield 2025-26 ex-farm terms; Camgrain
+    charges), so the weight a dry crop has lost is lost money.
+    moisture: [member, field, hour] -> returns [member, field, hour]
+    """
+    yield_t = crop_numbers(params, "yield_t_per_ha")
+    dry_matter = yield_t * (1 - crop_numbers(params, "yield_moisture_pct") / 100)
+    return dry_matter / (1 - moisture / 100)
+
+
 def drying_cost_gbp_per_t(moisture, params):
     """£ per tonne to have the store dry the grain, using Camgrain's published charges.
 
-    Source: https://www.camgrain.co.uk/charges-for-2025 (cereals, harvest 2026). The handling
-    charge and throughput loss are paid whatever the moisture, so they're left out.
+    Source: https://www.camgrain.co.uk/charges-for-2025 (harvest 2026). The drying target and the
+    free level are per crop (target_moisture_pct, free_drying_up_to_pct): cereals dry to 14% and are
+    free up to 15%, oilseeds dry to 9% and are free up to 9%. The handling charge and throughput
+    loss are paid whatever the moisture, so they're left out.
 
     moisture: [member, field, hour]  grain moisture, % (from predict_moisture)
     returns:  [member, field, hour]  drying charge + value of the weight deducted, £/t
     """
-    # a flat charge per 0.5% band above 15%: 15.1-15.5% -> £2, 15.6-16.0% -> £4, ...
+    # a flat charge per 0.5% band above the crop's free level. Cereals (free up to 15%):
+    # 15.1-15.5% -> £2, 15.6-16.0% -> £4, ...; oilseeds (free up to 9%): 9.1-9.5% -> £2, ...
     # (rounding first so 15.5% lands in the first band, not the second)
-    excess_pct = np.round(moisture, 1) - params["free_drying_up_to_pct"]
+    excess_pct = np.round(moisture, 1) - crop_numbers(params, "free_drying_up_to_pct")
     bands = np.maximum(0, np.ceil(np.round(excess_pct / params["drying_band_pct"], 6)))
     charge_gbp_per_t = params["drying_charge_gbp_per_band"] * bands
 
     # the store also keeps some weight for every point of moisture it removes
-    removed_pct = np.maximum(0, moisture - params["target_moisture_pct"])
+    removed_pct = np.maximum(0, moisture - crop_numbers(params, "target_moisture_pct"))
     weight_loss_pct = params["weight_loss_pct_per_pct"] * removed_pct
     price = crop_numbers(params, "price_gbp_per_t")
     return charge_gbp_per_t + price * weight_loss_pct / 100
@@ -113,9 +133,9 @@ def member_values(weather, start_moisture, params, first_hour=0):
     moisture = predict_moisture(start_moisture, weather, params)  # [member, field, hour]
 
     price = crop_numbers(params, "price_gbp_per_t")
-    tonnes = crop_numbers(params, "yield_t_per_ha")
+    tonnes = delivered_tonnes_per_ha(moisture, params)  # [member, field, hour]
 
-    # grain sold, minus what the store charges to dry it
+    # grain sold, at the weight it has at this moisture, minus what the store charges to dry it
     gbp_per_ha = tonnes * (price - drying_cost_gbp_per_t(moisture, params))
 
     # the longer the crop stands, the more of it is lost

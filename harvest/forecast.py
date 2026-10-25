@@ -6,7 +6,8 @@ To use a different prediction format, rewrite load_forecast() so it returns the 
 import numpy as np
 import pandas as pd
 
-COLUMNS = ["rain_mm", "humidity_pct"]
+# temp_c lets value.predict_moisture re-run the grain moisture model from every reading
+COLUMNS = ["rain_mm", "humidity_pct", "temp_c"]
 
 
 def sort_by_field(table, params):
@@ -28,8 +29,9 @@ def load_forecast(path, params, moisture_path=None):
     path:          the forecast CSV file
     params:        settings from params.yaml (the field order comes from params["fields"])
     moisture_path: outputs/moisture_forecast.csv (from scripts/moisture_forecast.py), or None
-    returns: {"rain_mm": [member, field, hour], "humidity_pct": [member, field, hour]},
-             plus "moisture_pct": [member, field, hour] when moisture_path is given
+    returns: {"rain_mm", "humidity_pct", "temp_c"}: [member, field, hour],
+             plus "moisture_pct": [member, field, hour] when moisture_path is given (then
+             predict_moisture slides those curves instead of re-running the moisture model)
     """
     table, shape = sort_by_field(pd.read_csv(path), params)
     weather = {column: table[column].to_numpy(dtype=float).reshape(shape) for column in COLUMNS}

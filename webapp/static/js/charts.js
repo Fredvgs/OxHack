@@ -182,7 +182,8 @@ export function drawMoisture(element, farm, plan, field, hour, planNow, height) 
   const actual = plan.true_moisture_pct[field].slice(0, hour + 1).map((y, x) => ({ x, y }));
   const { band, marks } = bandMarks(planNow.moisture_pct.map((b) => b[field]), actual, planNow);
   const readings = actual.filter((point) => point.x % plan.limits.sensor_every_hours === 0);
-  const { too_wet_pct: tooWet, free_drying_pct: freeDrying } = plan.limits;
+  const tooWet = plan.limits.too_wet_pct;
+  const freeDrying = plan.limits.free_drying_pct[field]; // per crop, so one per field
   const values = [...band.flatMap((d) => [d.low, d.high]), ...actual.map((d) => d.y), tooWet, freeDrying];
   const end = band.at(-1);
 

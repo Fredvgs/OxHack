@@ -27,6 +27,11 @@ weather_labels_url: https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/
 weather_attribution: "Forecast © Open-Meteo · Radar © RainViewer · Map © Esri"
 play_ms_per_hour: 400         # weather map animation speed
 
+# Today's weather chart: the colour steps of its tabs (Moisture uses the drying and too-wet limits
+# in params.yaml)
+chart_rain_steps_pct: [20, 40, 60, 80]   # chance of rain; under the first step stays blank
+chart_temp_steps_c: [5, 10, 15, 20, 25]  # temperature, cold to warm
+
 # Map
 trail_minutes: 90             # how much of each combine's track is drawn behind it
 

@@ -203,6 +203,7 @@ def plan():
                 "moisture_pct": np.round(plan["moisture_pct"], 1).tolist(),  # [band][field][hour]
                 "rain_chance": np.round(plan["rain_chance"], 2).tolist(),  # [field][hour]
                 "humidity_pct": np.round(plan["humidity_pct"]).tolist(),  # [band][field][hour]
+                "temp_c": np.round(plan["temp_c"], 1).tolist(),  # [field][hour]
                 "change": change,  # [sentence] what this replan learned and changed
             }
             for plan, change in zip(run["plans"], changes)

@@ -1,6 +1,7 @@
 // The Today page's two charts, plain SVG in the site's colours (webapp/DESIGN.md), on one hour
-// axis for the whole season: what each field is worth if cut each hour, with where the plan sends
-// each combine; and each combine's hours, what it did so far and what the plan has it do next.
+// axis for the whole season: the weather each field gets each hour (rain, grain moisture or
+// temperature, one tab at a time), with where the plan sends each combine; and each combine's
+// hours, what it did so far and what the plan has it do next.
 
 const SVG = "http://www.w3.org/2000/svg";
 const LEFT = 150; // px for the row names
@@ -20,12 +21,7 @@ function add(parent, tag, attrs, text) {
 // the plan made at or before this hour
 const planInForce = (season, hour) => season.plans.filter((p) => p.hour <= hour).at(-1);
 
-// ---------- worth: the demo's colour steps, paper -> straw -> soil ----------
-export function worthSteps(season) {
-  const step = Math.ceil(season.value_max_gbp_per_ha / 5 / 50) * 50; // £/ha rounded to 50s
-  return [0, 1, 2, 3, 4].map((i) => i * step);
-}
-
+// ---------- the weather tabs: what colours each field-hour ----------
 function rgb(hex) {
   const n = parseInt(hex.replace("#", ""), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -33,13 +29,62 @@ function rgb(hex) {
 function mix(a, b, t) {
   return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",")})`;
 }
-export function worthShades() {
-  const [paper, straw, soil] = ["paper", "straw", "soil"].map((name) => rgb(css(name)));
-  // the demo's scale: 7 even points from paper through straw to soil, the first two dropped
-  return [2, 3, 4, 5, 6].map((i) => (i <= 3 ? mix(paper, straw, i / 3) : mix(straw, soil, (i - 3) / 3)));
+
+// Each tab: the plan's number for field f at plan column c, steps(f) the lower edge of each colour
+// step for that field, a colour and a key label per step. A value under the first step is blank.
+export function weatherLayers(farm, season) {
+  const [paper, straw, soil, rain, alarm] = ["paper", "straw", "soil", "rain", "alarm"].map((name) => rgb(css(name)));
+  // grain moisture: drying is free up to a limit that depends on the crop (one per field, or one
+  // number for all), and no crop can be cut above too_wet_pct
+  const { free_drying_pct: free, too_wet_pct: wet } = season.limits;
+  const freeOf = (f) => (Array.isArray(free) ? free[f] : free);
+  const cropsAt = {}; // limit -> crops with it, for the key: "15% wheat, barley · 9% OSR"
+  farm.fields.forEach((field, f) => {
+    const name = field.crop === "osr" ? "OSR" : field.crop;
+    cropsAt[freeOf(f)] = [...new Set([...(cropsAt[freeOf(f)] ?? []), name])];
+  });
+  const freeText = Object.entries(cropsAt)
+    .sort(([a], [b]) => b - a)
+    .map(([limit, crops]) => `${Number(limit)}% ${crops.join(", ")}`)
+    .join(" · ");
+  const rainSteps = farm.site.chart_rain_steps_pct; // e.g. [20, 40, 60, 80]
+  const tempSteps = farm.site.chart_temp_steps_c; // e.g. [5, 10, 15, 20, 25]
+  const nTemp = tempSteps.length + 1; // one step below the first edge too
+  return {
+    rain: {
+      word: "Rain",
+      value: (p, f, c) => p.rain_pct[f][c],
+      steps: () => rainSteps,
+      colours: rainSteps.map((_, i) => mix(paper, rain, (i + 1) / rainSteps.length)),
+      labels: rainSteps.map((low) => `${low}%+`),
+      blank: `under ${rainSteps[0]}% chance of rain`,
+    },
+    moisture: {
+      word: "Moisture",
+      value: (p, f, c) => p.moisture_pct[f][c],
+      // heavy drying from halfway between the field's free-drying limit and too wet
+      steps: (f) => [-Infinity, freeOf(f), (freeOf(f) + wet) / 2, wet],
+      colours: [mix(paper, straw, 0.45), mix(straw, soil, 0.15), mix(straw, soil, 0.85), mix(alarm, paper, 0.1)],
+      labels: [`no drying charge (under ${freeText})`, "drying charged", "heavy drying", `over ${wet}%, too wet to cut`],
+      blank: "",
+    },
+    temperature: {
+      word: "Temperature",
+      value: (p, f, c) => p.temp_c[f][c],
+      steps: () => [-Infinity, ...tempSteps],
+      // cold to warm: rain blue, through paper, to brick
+      colours: [...Array(nTemp).keys()].map((i) => {
+        const t = i / (nTemp - 1);
+        return t < 0.5 ? mix(rain, paper, t * 2 * 0.85) : mix(paper, alarm, (t - 0.5) * 2 * 0.85);
+      }),
+      labels: [`under ${tempSteps[0]}°C`, ...tempSteps.map((low, i) => (i + 1 < tempSteps.length ? `${low}-${tempSteps[i + 1]}°C` : `${low}°C+`))],
+      blank: "",
+    },
+  };
 }
-function shadeIndex(steps, value) {
-  if (!(value > 0)) return -1; // can't be cut: left blank
+
+function stepIndex(steps, value) {
+  if (value === undefined || value === null || value < steps[0]) return -1; // left blank
   let i = 0;
   while (i < steps.length - 1 && value >= steps[i + 1]) i++;
   return i;
@@ -78,28 +123,27 @@ function runs(keys) {
   return out;
 }
 
-// What each field is worth if cut each hour. Before now (pale): as the plan of that hour saw it.
-// From now: the plan in force. Ink boxes: where it sends each combine (its letter at the start).
-// Ink bar along the bottom of a row: hours a combine really cut there.
-export function drawWorth(element, farm, season, hour) {
+// The weather each field gets each hour, coloured by one tab (layer, from weatherLayers). Before
+// now (pale): as the plan of that hour forecast it. From now: the plan in force. Ink boxes: where
+// it sends each combine (its letter at the start). Ink bar along the bottom of a row: hours a
+// combine really cut there.
+export function drawWeather(element, farm, season, hour, layer) {
   const rowHeight = 18;
   const nFields = farm.fields.length;
   const { svg, x, nHours } = frame(element, season, nFields, rowHeight);
-  const steps = worthSteps(season);
-  const shades = worthShades();
   const now = planInForce(season, hour);
 
   farm.fields.forEach((field, f) => {
     const top = f * rowHeight;
     const shade = [...Array(nHours).keys()].map((h) => {
       const p = h < hour ? planInForce(season, h) : now;
-      const value = p.value_gbp_per_ha[f][h - p.hour];
-      return `${shadeIndex(steps, value)}|${h < hour ? "past" : "plan"}`;
+      const value = layer.value(p, f, h - p.hour); // undefined past the end of the plan
+      return `${stepIndex(layer.steps(f), value)}|${h < hour ? "past" : "plan"}`;
     });
     runs(shade).forEach(({ start, end, key }) => {
       const [i, when] = key.split("|");
       if (Number(i) < 0) return;
-      add(svg, "rect", { x: x(start), y: top + 1, width: x(end) - x(start) + 0.3, height: rowHeight - 2, fill: shades[Number(i)], opacity: when === "past" ? 0.4 : 1 });
+      add(svg, "rect", { x: x(start), y: top + 1, width: x(end) - x(start) + 0.3, height: rowHeight - 2, fill: layer.colours[Number(i)], opacity: when === "past" ? 0.4 : 1 });
     });
     add(svg, "line", { x1: LEFT, x2: x(nHours), y1: top + rowHeight, y2: top + rowHeight, stroke: css("rule") });
     add(svg, "text", { x: LEFT - 8, y: top + 13, class: "row-name", "text-anchor": "end" }, field.label);
@@ -165,7 +209,7 @@ export function drawRoutes(element, farm, season, hour) {
         opacity: when === "plan" ? 0.55 : 1, stroke: kind === "waiting" || when === "plan" ? css("ink-2") : "none",
         "stroke-dasharray": when === "plan" ? "3 2" : "none",
       });
-      const name = Number(f) < nFields ? farm.fields[Number(f)].label.split(" ")[0] : "";
+      const name = Number(f) < nFields ? farm.fields[Number(f)].label : "";
       if (kind !== "driving" && name && right - left > name.length * 6.6 + 8) {
         add(svg, "text", { x: left + 4, y: top + rowHeight / 2 + 4, class: "stretch" }, name);
       }

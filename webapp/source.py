@@ -97,9 +97,10 @@ def season():
         "activity", "place": [machine][hour], "tracks": [machine][frame][lat, lng]
         "harvested_ha": [hour + 1], "earned_gbp": [hour + 1] totals so far
         "plans":        one per replan: "hour", "schedule" [machine][hour from plan start]
-                        (field index, n_fields = yard, "wait" = stay put), "value_gbp_per_ha"
-                        [field][hour from plan start], for the Today charts
-        "value_max_gbp_per_ha", "night" [hour] bool, "days" [{"hour", "label"}], "wait"
+                        (field index, n_fields = yard, "wait" = stay put), and for the Today
+                        charts [field][hour from plan start]: "value_gbp_per_ha", "rain_pct"
+                        (chance of rain), "moisture_pct" (grain), "temp_c"
+        "night" [hour] bool, "days" [{"hour", "label"}], "wait"
     }
     """
     plan = demo_state.plan()
@@ -149,10 +150,13 @@ def season():
                 "hour": p["hour"],
                 "schedule": p["schedule"],
                 "value_gbp_per_ha": p["value_gbp_per_ha"],
+                # the weather the plan saw, for Today's chart tabs: [field][hour from plan start]
+                "rain_pct": np.round(100 * np.array(p["rain_chance"])).astype(int).tolist(),
+                "moisture_pct": p["moisture_pct"][1],  # the middle of the forecasts
+                "temp_c": p["temp_c"],
             }
             for p in plan["plans"]
         ],
-        "value_max_gbp_per_ha": plan["value_max_gbp_per_ha"],
         "night": plan["night"],
         "days": plan["days"],
         "wait": plan["wait"],

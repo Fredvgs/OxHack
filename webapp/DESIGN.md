@@ -53,6 +53,9 @@ always with a legend.
 - Straight lines between hourly points, never smoothed. Midnight ticks labelled "Tue 27".
 - The "now" line is the one thing that moves when time moves.
 - Charts that share an hour axis share their left and right margins, so their hours line up.
+- Today's weather chart shows one thing at a time, picked by a tab (Rain, Moisture, Temperature),
+  each with its own colour steps and key: rain in rain blue, moisture from straw to soil with
+  alarm for too wet, temperature from rain blue through paper to alarm.
 
 ## Motion
 - Only things that change with time move: combines, the cut area, the now line, the home page's

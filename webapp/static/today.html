@@ -48,9 +48,14 @@
     </div>
 
     <section class="section">
-      <div class="section-head"><h2>Worth per hectare, hour by hour</h2><span class="num muted" id="plan-made"></span></div>
-      <div class="chart-box" id="worth-chart"></div>
-      <p class="key" id="worth-key"></p>
+      <div class="section-head"><h2>Weather by field, hour by hour</h2><span class="num muted" id="plan-made"></span></div>
+      <div class="tabs chart-tabs" id="weather-tabs">
+        <button class="tab" data-layer="rain">Rain</button>
+        <button class="tab" data-layer="moisture">Moisture</button>
+        <button class="tab" data-layer="temperature">Temperature</button>
+      </div>
+      <div class="chart-box" id="weather-chart"></div>
+      <p class="key" id="weather-key"></p>
     </section>
 
     <section class="section">

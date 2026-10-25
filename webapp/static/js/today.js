@@ -1,14 +1,19 @@
 // Today: one sentence that answers "should I cut?", then the fields (with which combine the plan
-// sends there and when), the combines, the real weather at the farm, and two charts of the plan.
+// sends there and when), the combines, the real weather at the farm, and two charts of the plan:
+// the weather each field gets (Rain / Moisture / Temperature tabs) and where the combines go.
 
 import { $, ACTIVITY, crop, everySecond, lamp, load, makeClock, showAlerts, topbar } from "./common.js";
-import { drawRoutes, drawWorth, worthShades, worthSteps } from "./plan-charts.js";
+import { drawRoutes, drawWeather, weatherLayers } from "./plan-charts.js";
 import { farmForecast, nowIndex, weatherWord } from "./weather-data.js";
 
 const { farm, season } = await load();
 const clock = makeClock(farm);
 topbar(farm, "today.html", clock);
 const totalHa = farm.fields.reduce((sum, field) => sum + field.area_ha, 0);
+const layers = weatherLayers(farm, season);
+// the chart's tab: ?tab=moisture opens one, then it's kept while browsing
+let layer = new URLSearchParams(location.search).get("tab") ?? sessionStorage.getItem("weather-tab") ?? "rain";
+if (!layers[layer]) layer = "rain";
 
 let weather = null; // the real forecast at the farm, once it arrives
 farmForecast(farm)
@@ -97,15 +102,23 @@ function showFields(hour) {
 function showCharts(hour) {
   const p = season.plans.filter((plan) => plan.hour <= hour).at(-1);
   $("#plan-made").textContent = `plan of ${season.labels[p.hour].slice(0, 3)} ${season.labels[p.hour].slice(-5)}`;
-  drawWorth($("#worth-chart"), farm, season, hour);
+  const shown = layers[layer];
+  drawWeather($("#weather-chart"), farm, season, hour, shown);
   drawRoutes($("#route-chart"), farm, season, hour);
-  const shades = worthShades();
-  $("#worth-key").innerHTML =
-    worthSteps(season)
-      .map((low, i) => `<span class="swatch" style="background:${shades[i]}"></span>£${low.toLocaleString("en-GB")}+`)
-      .join(" ") +
-    ` <span class="swatch blank"></span>can't be cut · box: where the plan sends a combine · bar: cut so far · pale: before now`;
+  document.querySelectorAll("#weather-tabs .tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.layer === layer));
+  const blank = shown.blank ? ` <span class="swatch blank"></span>${shown.blank}` : "";
+  $("#weather-key").innerHTML =
+    shown.labels.map((label, i) => `<span class="swatch" style="background:${shown.colours[i]}"></span>${label}`).join(" ") +
+    `${blank} · box: where the plan sends a combine · bar: cut so far · pale: before now`;
 }
+
+$("#weather-tabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-layer]");
+  if (!tab) return;
+  layer = tab.dataset.layer;
+  sessionStorage.setItem("weather-tab", layer);
+  showCharts(shownHour);
+});
 
 function showCombines(hour) {
   $("#combines").innerHTML = farm.machines

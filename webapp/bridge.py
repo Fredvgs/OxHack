@@ -174,13 +174,14 @@ def clock_start(times, demo):
 
 
 def outlook(plan, forecast, true_moisture, params, demo):
-    """Add to one plan the forecast its planner saw: moisture and humidity spread, chance of rain.
+    """Add to one plan the forecast its planner saw: moisture and humidity spread, chance of rain,
+    temperature.
 
     plan:          {"hour", "value" [field, hour], "schedule" [machine, hour]} from run_season
     forecast:      {name: [member, field, hour]} the members the planner sees, from the plan's hour
     true_moisture: [field, hour] the moisture the sensor reads
     returns: plan plus "moisture_pct" and "humidity_pct" [band, field, hour], "rain_chance"
-             [field, hour]
+             [field, hour], "temp_c" [field, hour] (mean over members)
     """
     hour = plan["hour"]
     n_plan = plan["value"].shape[1]  # shorter than plan_hours near the end of the forecast
@@ -194,6 +195,7 @@ def outlook(plan, forecast, true_moisture, params, demo):
         "moisture_pct": np.percentile(moisture, demo["band_percentiles"], axis=0),
         "rain_chance": rain_chance,
         "humidity_pct": np.percentile(upcoming["humidity_pct"], demo["band_percentiles"], axis=0),
+        "temp_c": upcoming["temp_c"].mean(axis=0),
     }
 
 

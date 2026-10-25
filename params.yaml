@@ -41,8 +41,8 @@ fields:
   - {name: ingham,         crop: osr,    area_ha: 904.0, lat: 52.3142, lon: 0.7194}  # 2,234 acres, 50 parcels
 
 machines:  # start: depot or a field name
-  - {name: combine_a, ha_per_hour: 3.0, start: depot}
-  - {name: combine_b, ha_per_hour: 2.5, start: depot}
+  - {name: combine_a, ha_per_hour: 1.0, start: depot}
+  - {name: combine_b, ha_per_hour: 1.0, start: depot}
   - {name: combine_c, ha_per_hour: 2.0, start: depot}
 
 # Fields in the order above, then the depot (the yard at Elveden village, 52.383, 0.675).

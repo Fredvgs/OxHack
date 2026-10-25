@@ -6,5 +6,6 @@ CLAUDE.local.md
 .claude/settings.local.json
 /.claude
 
-# past forecast runs downloaded by replay.py (harvest/past_data.py), re-downloaded when missing
+# past forecast runs and weather downloaded by replay.py (harvest/past_data.py), re-downloaded when missing
 data/past_forecasts/
+data/replay_weather/

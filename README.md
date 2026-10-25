@@ -2,7 +2,7 @@
 
 Decide which field each combine harvester works on, hour by hour, using an ensemble weather
 forecast. The plan is redone every time a new grain moisture reading comes in, and we measure
-the £ earned.
+the £ earned, net of what running the combines costs (diesel, operator, road escort, repairs).
 
 ## Run it
 
@@ -14,7 +14,7 @@ the £ earned.
 uv sync
 ```
 
-3. Run it. This prints the results and opens a chart window:
+3. Run it on today's forecast (live). This prints the results and opens a chart window:
 
 ```bash
 uv run python run.py
@@ -30,12 +30,19 @@ uv run pytest
    `forecast_every_hours` (needs internet the first time; dates are whole days in UTC, up to today):
 
 ```bash
-uv run python replay.py 2026-10-10 2026-10-25        # or no dates: replay_start/replay_end in params.yaml
+uv run python replay.py 2026-10-10 2026-10-25        # or no dates: rollout_start/rollout_end in params.yaml
 uv run python replay.py 2026-10-10 2026-10-25 mpc    # another planner
 ```
 
-It prints the £ earned and the path each combine followed (harvesting, driving, waiting), then
-plots it. Dates the archives can't cover are cut with a warning.
+It prints the £ earned, the running costs, and the path each combine followed (harvesting, driving, waiting), then
+plots it. Dates the archives can't cover are cut with a warning. Once dates are over and
+downloaded, replaying them again needs no internet.
+
+6. Compare every planner on the same past dates (same data as `replay.py`):
+
+```bash
+uv run python compare.py 2026-10-10 2026-10-25       # or no dates: rollout_start/rollout_end
+```
 
 **Troubleshooting**
 - `uv` is not recognized: close and reopen your editor/terminal after installing uv.
@@ -56,7 +63,7 @@ harvest/planners/        planners: which field each machine works on, each hour
 harvest/simulate.py      replanning loop: machines follow the plan; every few hours a new
        │                 moisture reading arrives, values are worked out again, and we replan
        ▼
-run.py                   prints the £ earned and plots what happened
+run.py                   prints the £ earned, less running costs, and plots what happened
 ```
 
 One forecast member is held back as "the weather that really happened". The planner never sees
@@ -70,11 +77,11 @@ same and you can rewrite any piece.
 | Path | What it is |
 |---|---|
 | `params.yaml` | every number: fields, machines, crop prices, thresholds, timings |
-| `run.py` | runs everything, prints results, plots them |
-| `compare.py` | runs every `plan_*` planner, plots each one, then one window comparing them |
-| `replay.py` | replays past dates with the real past forecasts and weather, prints and plots the path followed |
-| `harvest/` | the pipeline: `forecast.py`, `value.py`, `planners/` (one file per planner), `simulate.py`, and `past_data.py` for replays |
-| `data/` | the forecast CSV, its format, scripts to download a fresh one, and saved past forecasts (`past_forecasts/`, not in git) |
+| `run.py` | live: simulates the season ahead on today's forecast, prints results, plots them |
+| `replay.py` | replays past dates with one planner and the real past forecasts and weather, prints and plots the path followed |
+| `compare.py` | replays the same past dates with every `plan_*` planner, plots each one, then one window comparing them |
+| `harvest/` | the pipeline: `forecast.py`, `value.py`, `planners/` (one file per planner), `simulate.py`, and `past_data.py` for past dates |
+| `data/` | the forecast CSV, its format, scripts to download a fresh one, and saved past forecasts and weather (`past_forecasts/`, `replay_weather/`, not in git) |
 | `scripts/` | helper scripts run by hand: `moisture_forecast.py` (makes `outputs/moisture_forecast.csv`, which `run.py` reads), the moisture and rain sensitivity checks, and `plot_*.py` charts |
 | `outputs/` | CSV and PNG files written by `scripts/` |
 | `tests/` | `uv run pytest` |

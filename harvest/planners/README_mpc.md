@@ -6,8 +6,8 @@ the first `sensor_every_hours` and replans from the new moisture reading.
 
 **Model and objective.** The prediction model (`rollout`) reproduces the simulator: travel times
 rounded up to whole hours, one combine per field, cutting only in hours of positive value. The
-stage reward is the value of area cut, less `mpc_drive_gbp_per_hour` while travelling and
-`mpc_idle_in_field_gbp_per_hour` while standing in a field without cutting. A terminal reward
+stage reward is the value of area cut, less `drive_gbp_per_hour` while travelling and
+`idle_in_field_gbp_per_hour` while standing in a field without cutting. A terminal reward
 values standing area at `mpc_terminal_value_pct` of its mean value over the last
 `mpc_terminal_hours`; without it the controller harvests drying crop too early.
 

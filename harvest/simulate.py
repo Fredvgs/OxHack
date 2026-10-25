@@ -3,12 +3,14 @@
 Every `sensor_every_hours` a new grain moisture reading comes in, and every `forecast_every_hours`
 a newer forecast. Each time, the value function is worked out again and the planner makes a new
 plan. Machines follow the latest plan. This file (not the planner) handles driving time and what
-actually gets harvested, on the weather that really happens.
+actually gets harvested, on the weather that really happens, and what running the combines costs
+(running_costs in params.yaml).
 
 Two ways in:
 - run_season: one fixed forecast; one of its members plays the weather that really happens.
 - run_with_forecasts: the real weather, and a function that gives the newest forecast at any hour
-  (replay.py uses it with the forecasts that were really issued, see harvest/past_data.py).
+  (replay.py and compare.py use it with the forecasts that were really issued, see
+  harvest/past_data.py).
 """
 
 import numpy as np
@@ -53,6 +55,10 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
     returns: {
         "total_gbp":    float            money earned
         "earned_gbp":   [hour]           money earned in each hour
+        "running_cost_gbp": [machine, hour]  what running each machine cost (running_costs_gbp)
+        "cost_breakdown_gbp": {"diesel", "operator", "escort", "repairs"}  £ over the season
+        "net_gbp":      float            money earned minus running costs
+        "cut_ha":       [machine, hour]  hectares each machine cut
         "harvesting":   [machine, hour]  field each machine harvested, WAIT (-1) if none
         "place":        [machine, hour]  where each machine is, or is driving to: field index,
                                          or number of fields = the depot
@@ -76,6 +82,7 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
     )
     arrives_at = np.zeros(len(machines), dtype=int)  # [machine] hour a driving machine gets there
     earned = np.zeros(n_hours)  # [hour] £
+    cut_ha = np.zeros((len(machines), n_hours))  # [machine, hour] ha
     harvesting = np.full((len(machines), n_hours), WAIT)  # [machine, hour] field index or WAIT
     place = np.zeros((len(machines), n_hours), dtype=int)  # [machine, hour] field index or depot
     driving = np.zeros((len(machines), n_hours), dtype=bool)  # [machine, hour]
@@ -118,16 +125,67 @@ def run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy):
                 ha = min(remaining[target], machine["ha_per_hour"])  # float
                 remaining[target] -= ha
                 earned[hour] += ha * true_value[target, hour]
+                cut_ha[m, hour] = ha
                 harvesting[m, hour] = target
             place[m, hour] = machine_at[m]
             driving[m, hour] = hour < arrives_at[m]
 
+    costs = running_costs_gbp(cut_ha, driving, place, params)  # {item: [machine, hour] £}
+    running_cost = sum(costs.values())  # [machine, hour] £
     return {
         "total_gbp": earned.sum(),
         "earned_gbp": earned,
+        "running_cost_gbp": running_cost,
+        "cost_breakdown_gbp": {item: cost.sum() for item, cost in costs.items()},
+        "net_gbp": earned.sum() - running_cost.sum(),
+        "cut_ha": cut_ha,
         "harvesting": harvesting,
         "place": place,
         "driving": driving,
         "remaining_ha": remaining,
         "plans": plans,
+    }
+
+
+def activities(cut_ha, driving, place, n_fields):
+    """What each machine is doing each hour. In every hour exactly one of the four is True.
+
+    cut_ha:   [machine, hour] hectares cut
+    driving:  [machine, hour] bool, on the road
+    place:    [machine, hour] where it is or is driving to: field index, or n_fields = the depot
+    returns:  {"cutting", "driving", "waiting", "depot"}: [machine, hour] bool each. Waiting means
+              in a field without cutting: raining, too wet, nothing left, or told to wait
+    """
+    cutting = cut_ha > 0
+    depot = (place == n_fields) & ~driving
+    waiting = ~cutting & ~driving & ~depot
+    return {"cutting": cutting, "driving": driving, "waiting": waiting, "depot": depot}
+
+
+def running_costs_gbp(cut_ha, driving, place, params):
+    """What running the combines costs, item by item, from what each one does each hour.
+
+    These are the farm's real costs (running_costs in params.yaml, with sources), not the
+    planners' own simpler numbers, so every planner is scored the same way.
+    - diesel:   per hectare cut, and per hour on the road
+    - operator: every hour cutting, driving or waiting in a field (paid standby). Nothing at the
+                depot, where the operator is stood down
+    - escort:   every hour on the road (a combine over 3.5 m wide needs an attendant)
+    - repairs:  every hour the engine runs: cutting or driving
+
+    cut_ha, driving, place: as for activities
+    returns: {"diesel", "operator", "escort", "repairs"}: [machine, hour] £ each
+    """
+    costs = params["running_costs"]
+    doing = activities(cut_ha, driving, place, len(params["fields"]))
+    engine_on = doing["cutting"] | doing["driving"]  # [machine, hour] bool
+    litres = (  # [machine, hour]
+        cut_ha * costs["cutting_diesel_litres_per_ha"]
+        + doing["driving"] * costs["road_diesel_litres_per_hour"]
+    )
+    return {
+        "diesel": litres * costs["diesel_gbp_per_litre"],
+        "operator": (engine_on | doing["waiting"]) * costs["operator_gbp_per_hour"],
+        "escort": doing["driving"] * costs["road_escort_gbp_per_hour"],
+        "repairs": engine_on * costs["repairs_gbp_per_engine_hour"],
     }

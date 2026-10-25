@@ -25,7 +25,10 @@ subgradient descent with normalised steps $\alpha_0/(k+1)$, keeping the lowest b
 by the field subproblems at the final $\lambda$ (Adelman and Mersereau, §3.2). A free combine is
 sent to the unoccupied field with the largest gain per hectare from cutting on arrival rather
 than leaving the field to its subproblem, with travel time charged at $\lambda$. It keeps its
-current field if that field is within `lagrangian_wait_margin_gbp_per_ha` of indifference.
+current field if that field is within `lagrangian_wait_margin_gbp_per_ha` of indifference. The
+schedule then goes through `send_idle_to_depot` (`common.py`, described in `README_greedy.md`),
+which sends a combine to the depot for a gap in cutting when that costs less than waiting in the
+field. `plan_mpc` warm-starts from this schedule.
 
 **Departures from the paper.** (i) Finite horizon, undiscounted. (ii) Deterministic subproblems on
 the expected value; uncertainty is handled only by replanning. (iii) Multipliers are indexed by

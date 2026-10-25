@@ -13,16 +13,19 @@ import yaml
 
 from harvest import past_data
 from harvest.past_data import (
+    forecast_runs,
     is_complete,
     load_run,
     past_forecasts,
+    past_rollout,
+    past_weather,
     published_runs,
     relative_humidity_pct,
-    saved_run,
+    saved_table,
     season_dates,
     to_hourly,
-    weather_from_open_meteo,
 )
+from harvest.simulate import run_with_forecasts
 
 ROOT = Path(__file__).parent.parent
 
@@ -37,6 +40,16 @@ def two_fields(params):
         {"name": "f1", "crop": "barley", "area_ha": 1, "lat": 52.5, "lon": 13.4},
     ]
     return params
+
+
+def offline(monkeypatch):
+    """Make going online fail the test."""
+
+    def fail(*args):
+        raise AssertionError("went online")
+
+    monkeypatch.setattr(past_data, "open_archive", fail)
+    monkeypatch.setattr(past_data, "download_weather", fail)
 
 
 def test_forecast_steps_become_hours():
@@ -101,24 +114,46 @@ def test_get_forecast_uses_the_newest_complete_run(monkeypatch):
     params = two_fields(demo_params())
     params["forecast_delay_hours"] = 8
     runs = pd.date_range("2026-10-10", periods=3, freq="D")  # 00 UTC every day
-    archive = {"init_time": SimpleNamespace(values=runs.values)}  # only the run times are read
 
-    def fake_load_run(archive, run, params):  # hour h of every run holds h; the newest is partial
+    def fake_load_run(run, params):  # hour h of every run holds h; the newest is partial
         if run == runs[-1]:
             return None
         return {"temp_c": np.tile(np.arange(48.0), (51, 2, 1))}  # [member, field, hour]
 
     monkeypatch.setattr(past_data, "load_run", fake_load_run)
-    get_forecast, runs_used = past_forecasts(archive, pd.Timestamp("2026-10-11 06:00"), params)
+    get_forecast, runs_used = past_forecasts(runs, pd.Timestamp("2026-10-11 06:00"), params)
     assert get_forecast(0)["temp_c"][0, 0, 0] == 30  # 11 Oct 06:00: the 10 Oct run, 30 h in
     assert get_forecast(6)["temp_c"][0, 0, 0] == 12  # 12:00: the 11 Oct run is out, 12 h in
     assert get_forecast(30)["temp_c"][0, 0, 0] == 36  # 12 Oct run partial: 11 Oct run, 36 h in
     assert runs_used == {0: runs[0], 6: runs[1]}
 
 
+def test_the_saved_list_of_runs_is_used_while_it_is_new_enough(tmp_path, monkeypatch):
+    params = demo_params()
+    params["forecast_delay_hours"] = 8
+    params["forecast_run_every_hours"] = 24
+    monkeypatch.setattr(past_data, "FORECAST_DIR", tmp_path)
+    runs = pd.date_range("2026-10-10", "2026-10-20", freq="D")  # 00 UTC every day
+    opened = []
+
+    def fake_open_archive(params):  # only the run times are read
+        opened.append(True)
+        return {"init_time": SimpleNamespace(values=runs.values)}
+
+    monkeypatch.setattr(past_data, "open_archive", fake_open_archive)
+    assert list(forecast_runs(pd.Timestamp("2026-10-15"), params)) == list(runs)
+    assert len(opened) == 1  # nothing saved yet
+    # a 21 Oct run would only be out at 08:00 that day, after a replay to the 20th ends
+    assert list(forecast_runs(pd.Timestamp("2026-10-20"), params)) == list(runs)
+    assert len(opened) == 1
+    forecast_runs(pd.Timestamp("2026-10-21"), params)  # ... but it could matter on the 21st
+    assert len(opened) == 2
+
+
 def test_a_saved_run_is_read_back_without_downloading(tmp_path, monkeypatch):
     params = two_fields(demo_params())
     monkeypatch.setattr(past_data, "FORECAST_DIR", tmp_path)
+    offline(monkeypatch)
     rows = []
     for member in range(2):
         for field in params["fields"]:
@@ -139,14 +174,13 @@ def test_a_saved_run_is_read_back_without_downloading(tmp_path, monkeypatch):
     path.parent.mkdir()
     pd.DataFrame(rows).to_csv(path, index=False)
 
-    # no archive: it would fail if it tried to download
-    weather = load_run(None, pd.Timestamp("2026-10-10"), params)
+    weather = load_run(pd.Timestamp("2026-10-10"), params)
     assert weather["temp_c"].shape == (2, 2, 6)  # [member, field, hour]
     assert weather["temp_c"][1, 1] == pytest.approx(10 + np.arange(6))
     assert weather["rain_mm"] == pytest.approx(0)
 
     params["fields"][1]["lat"] = 51.0  # the field moved, so the saved run no longer fits
-    assert saved_run(path, params) is None
+    assert saved_table(path, params) is None
 
 
 def test_runs_still_being_added_are_spotted():
@@ -163,21 +197,74 @@ def test_runs_still_being_added_are_spotted():
     assert not is_complete(table)
 
 
-def test_past_weather_gives_each_hour_the_rain_that_fell_during_it():
-    """Open-Meteo reports an hour's rain at its END: 06:00-07:00 is the value at 07:00."""
-    params = two_fields(demo_params())
-    locations = [
+def fake_open_meteo(params):
+    """Open-Meteo's answer for 2 days from midnight, one dict per field.
+
+    Temperature = hour of the answer, rain = that + 100 x field index.
+    """
+    return [
         {
             "hourly": {
-                "temperature_2m": [float(hour) for hour in range(48)],  # = hour of the answer
+                "temperature_2m": [float(hour) for hour in range(48)],
                 "relative_humidity_2m": [80.0] * 48,
                 "precipitation": [float(hour) + 100 * f for hour in range(48)],
             }
         }
-        for f in range(2)
+        for f in range(len(params["fields"]))
     ]
-    weather = weather_from_open_meteo(locations, pd.Timestamp("2026-10-10 06:00"), 3, params)
+
+
+def test_past_weather_gives_each_hour_the_rain_that_fell_during_it(tmp_path, monkeypatch):
+    """Open-Meteo reports an hour's rain at its END: 06:00-07:00 is the value at 07:00."""
+    params = two_fields(demo_params())
+    monkeypatch.setattr(past_data, "WEATHER_DIR", tmp_path)
+    monkeypatch.setattr(past_data, "download_weather", lambda *args: fake_open_meteo(params))
+    weather = past_weather(pd.Timestamp("2026-10-10 06:00"), 3, params)
     assert weather["rain_mm"].shape == (1, 2, 3)  # [member, field, hour]
     assert weather["temp_c"][0, 0] == pytest.approx([6, 7, 8])  # starts at 06:00
     assert weather["rain_mm"][0, 0] == pytest.approx([7, 8, 9])
     assert weather["rain_mm"][0, 1] == pytest.approx([107, 108, 109])
+
+
+def test_past_weather_is_read_back_without_downloading(tmp_path, monkeypatch):
+    params = two_fields(demo_params())
+    monkeypatch.setattr(past_data, "WEATHER_DIR", tmp_path)
+    monkeypatch.setattr(past_data, "download_weather", lambda *args: fake_open_meteo(params))
+    first_hour = pd.Timestamp("2026-10-10 06:00")
+    downloaded = past_weather(first_hour, 3, params)
+
+    offline(monkeypatch)
+    saved = past_weather(first_hour, 3, params)
+    for name in downloaded:
+        assert saved[name] == pytest.approx(downloaded[name])
+
+    params["fields"][1]["lat"] = 51.0  # the field moved, so the saved weather no longer fits
+    with pytest.raises(AssertionError, match="went online"):
+        past_weather(first_hour, 3, params)
+
+
+def test_a_past_rollout_gives_run_with_forecasts_what_it_needs(monkeypatch):
+    """Two past days with made-up calm weather: 48 season hours, and each day's run comes in at
+    the first replan after it's published (08:00, so 12:00)."""
+    params = demo_params()
+    params["forecast_delay_hours"] = 8
+    runs = pd.date_range("2026-10-01", "2026-10-20", freq="D")  # 00 UTC every day
+
+    def calm(n_members, n_hours):  # {name: [member, field, hour]}
+        shape = (n_members, len(params["fields"]), n_hours)
+        return {
+            "temp_c": np.full(shape, 15.0),
+            "humidity_pct": np.full(shape, 60.0),
+            "rain_mm": np.zeros(shape),
+        }
+
+    monkeypatch.setattr(past_data, "forecast_runs", lambda end, params: runs)
+    monkeypatch.setattr(past_data, "past_weather", lambda first, n_hours, params: calm(1, n_hours))
+    monkeypatch.setattr(past_data, "load_run", lambda run, params: calm(2, 360))
+    days = pd.Timestamp("2026-10-10"), pd.Timestamp("2026-10-11")
+    truth, get_forecast, first_hour, runs_used = past_rollout(*days, params)
+    result = run_with_forecasts(truth, get_forecast, params)
+
+    assert first_hour == pd.Timestamp("2026-10-10")
+    assert len(result["earned_gbp"]) == 48
+    assert runs_used == {0: runs[8], 12: runs[9], 36: runs[10]}  # the 9, 10 and 11 Oct runs

@@ -30,8 +30,8 @@ Reads the prediction data.
 
 Optional third input **`moisture_path`**: `outputs/moisture_forecast.csv` (written by
 `scripts/moisture_forecast.py`). Adds `weather["moisture_pct"]`: `[M, F, H]` grain moisture
-(% wet basis, end of each hour), and the value function then uses it (see below). `run.py` and `compare.py`
-pass it. It must come from the same `forecast.csv`, or loading stops with an error.
+(% wet basis, end of each hour), and the value function then uses it (see below). `run.py`
+passes it. It must come from the same `forecast.csv`, or loading stops with an error.
 
 Also **`load_moisture(path, params)`**: reads just that CSV, out `[M, F, H]`, each field taking the
 column of its own crop. Feed it to `drying_cost_gbp_per_t` (see `scripts/plot_drying_cost.py`).
@@ -73,6 +73,10 @@ short README on the method:
 | `lagrangian.py` | `plan_lagrangian` | `README_lagrangian.md` |
 | `mpc.py` | `plan_mpc` | `README_mpc.md` |
 
+Every planner except `plan_mpc` ends with `send_idle_to_depot` (`common.py`): a combine with a
+gap in cutting waits at the depot when that costs less than standing in a field (costs in
+`params.yaml`, `depot_when_idle: false` to switch it off). `plan_mpc` weighs the same costs itself.
+
 `from harvest.planners import plan_mpc` works for any of them. A new planner goes in its own file
 and in `__all__` in `planners/__init__.py`, which is what `compare.py` runs. Every planner has the
 same inputs and outputs:
@@ -92,10 +96,10 @@ The planner only says where machines should be. Driving time and harvesting happ
 Two ways in, with the same result:
 
 - **`run_season(weather, params, planner=plan_urgencygreedy)`**: one forecast that never changes
-  (`run.py`, `compare.py`). It holds back forecast member `truth_member` as "the weather that
+  (`run.py`). It holds back forecast member `truth_member` as "the weather that
   really happens"; the planner never sees it. The season is `season_hours` long.
 - **`run_with_forecasts(truth, get_forecast, params, planner=plan_urgencygreedy)`**: the forecast
-  is updated as the season goes (`replay.py`).
+  is updated as the season goes (`replay.py`, `compare.py`, with `past_data.past_rollout`).
 
 | | Name | Type / shape | Meaning |
 |---|---|---|---|
@@ -105,6 +109,10 @@ Two ways in, with the same result:
 | in | `planner` | function | any `plan_*` function (default: `plan_urgencygreedy`) |
 | out | `result["total_gbp"]` | float | money earned over the season |
 | out | `result["earned_gbp"]` | `[H]` | money earned each hour |
+| out | `result["running_cost_gbp"]` | `[K, H]` | what running each machine cost each hour (see below) |
+| out | `result["cost_breakdown_gbp"]` | dict of floats | `{"diesel", "operator", "escort", "repairs"}`: £ over the season |
+| out | `result["net_gbp"]` | float | money earned minus running costs: what `compare.py` ranks planners by |
+| out | `result["cut_ha"]` | `[K, H]` | hectares each machine cut each hour |
 | out | `result["harvesting"]` | `[K, H]` int | field each machine harvested each hour, `-1` = driving or waiting |
 | out | `result["place"]` | `[K, H]` int | where each machine is, or is driving to: field index, `F` = depot |
 | out | `result["driving"]` | `[K, H]` bool | True while the machine is on the road |
@@ -122,16 +130,37 @@ What it does:
    - at the depot it does nothing;
    - at its field it cuts `ha_per_hour`, only if the true value that hour is above 0, until the field is empty;
    - money = hectares cut × the true £/ha.
+5. At the end it works out the running costs from what each machine did each hour, with
+   `running_costs` in `params.yaml` (UK numbers, with sources). These are the farm's real costs,
+   not the planners' own `idle_in_field_gbp_per_hour` and `drive_gbp_per_hour`, so every planner is
+   scored the same way whatever it planned with:
 
-## 4b. `past_data.py`: the forecasts that were really issued, for `replay.py`
+   | Doing | Costs per hour | About |
+   |---|---|---|
+   | cutting | diesel per ha cut + operator + repairs | £35/ha at 2.5 ha/h |
+   | driving | diesel per hour + operator + road escort + repairs | £95/h |
+   | waiting in a field | operator on paid standby (engine off) | £19/h |
+   | at the depot | nothing: the operator is stood down | £0 |
+
+Two helpers, both `[machine, hour]` in and out:
 
 | Function | In | Out |
 |---|---|---|
-| `open_archive(params)` | | the dynamical.org archive of ECMWF ensemble runs (`past_forecast_dataset`), opened lazily |
+| `activities(cut_ha, driving, place, n_fields)` | `cut_ha` `[K, H]`, `driving` `[K, H]`, `place` `[K, H]` from `result` | `{"cutting", "driving", "waiting", "depot"}`: `[K, H]` bool each, exactly one True per hour |
+| `running_costs_gbp(cut_ha, driving, place, params)` | the same | `{"diesel", "operator", "escort", "repairs"}`: `[K, H]` £ each |
+
+## 4b. `past_data.py`: the forecasts that were really issued, for `replay.py` and `compare.py`
+
+| Function | In | Out |
+|---|---|---|
+| `rollout_days(args, params)` | command-line arguments | `(start, end)`: the first two arguments as days, or `rollout_start`/`rollout_end` |
+| `past_rollout(start, end, params)` | first and last day | `(truth, get_forecast, first_hour, runs_used)` for `run_with_forecasts`: the three below put together |
+| `open_archive(params)` | | the dynamical.org archive of ECMWF ensemble runs (`past_forecast_dataset`), opened once, the first time something isn't saved |
+| `forecast_runs(end, params)` | last day | start times of the archive's runs, at least up to `end`; from the list saved in `data/past_forecasts/` while it's new enough, otherwise from the archive |
 | `season_dates(start, end, runs, params, now)` | first and last day | first hour and number of hours, cut (with a warning) to what the archives have and to the past |
-| `past_forecasts(archive, first_hour, params)` | | `(get_forecast, runs_used)`: `get_forecast` for `run_with_forecasts`, giving the newest run published by then (`forecast_delay_hours` after it starts) as `{"temp_c", "humidity_pct", "rain_mm"}` `[M, F, H]`; `runs_used` = `{season hour: run}` for each new run |
-| `past_weather(first_hour, n_hours, params)` | | the weather that happened, from Open-Meteo (`past_weather_model`): `{"temp_c", "humidity_pct", "rain_mm"}` `[1, F, H]` |
-| `load_run(archive, run, params)` | a run's start time | that run, hourly, `[M, F, H]` from its start; saved in `data/past_forecasts/` the first time |
+| `past_forecasts(runs, first_hour, params)` | | `(get_forecast, runs_used)`: `get_forecast` for `run_with_forecasts`, giving the newest run published by then (`forecast_delay_hours` after it starts) as `{"temp_c", "humidity_pct", "rain_mm"}` `[M, F, H]`; `runs_used` = `{season hour: run}` for each new run |
+| `past_weather(first_hour, n_hours, params)` | | the weather that happened, from Open-Meteo (`past_weather_model`): `{"temp_c", "humidity_pct", "rain_mm"}` `[1, F, H]`; saved in `data/replay_weather/` the first time |
+| `load_run(run, params)` | a run's start time | that run, hourly, `[M, F, H]` from its start; saved in `data/past_forecasts/` the first time |
 | `to_hourly(steps, step_hours, params)` | archive steps (every 3 or 6 h) `[M, F, step]` | `[M, F, H]`: temperature in straight lines, rain spread over each step, humidity from the dew point (Magnus) |
 
 In both, the rain at hour `h` is the rain that falls from `h` to `h + 1`, and it's all
@@ -145,7 +174,7 @@ A physically based model of grain moisture for wheat, barley and oilseed rape (`
 `temp_c`, `humidity_pct` and `rain_mm` straight from the forecast CSV.
 `scripts/moisture_forecast.py` saves the result to `outputs/moisture_forecast.csv`, which the
 pipeline reads through `load_forecast(..., moisture_path=...)`. `predict_moisture` runs it directly when the forecast has
-temperature (`replay.py`). All constants, including each crop's starting moisture
+temperature (past dates: `replay.py`, `compare.py`). All constants, including each crop's starting moisture
 (`start_moisture_pct`, placeholders for now), are in `params.yaml` under `moisture_model`, with
 sources. To use the official ASABE D245.7 Henderson constants, replace `henderson_k/c/n` there.
 

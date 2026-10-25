@@ -8,7 +8,8 @@ import yaml
 
 from harvest import planners
 from harvest.forecast import load_forecast, load_moisture
-from harvest.planners import WAIT, plan_lagrangian, plan_mpc
+from harvest.planners import WAIT, plan_lagrangian, plan_mpc, plan_vgreedy
+from harvest.planners.common import follow_plan, send_idle_to_depot
 from harvest.planners.lagrangian import field_alone, machine_prices
 from harvest.simulate import run_season, run_with_forecasts
 from harvest.value import (
@@ -95,6 +96,21 @@ def rain_farm():
     return params, weather
 
 
+def round_running_costs(params):
+    """Running costs easy to add up by hand. Per hour: cutting 1 ha costs £10 diesel + £15
+    operator + £30 repairs = £55; driving £20 diesel + £15 + £5 escort + £30 = £70; waiting in a
+    field £15 (the operator); the depot nothing."""
+    params["running_costs"] = {
+        "diesel_gbp_per_litre": 1.0,
+        "cutting_diesel_litres_per_ha": 10,
+        "road_diesel_litres_per_hour": 20,
+        "operator_gbp_per_hour": 15,
+        "road_escort_gbp_per_hour": 5,
+        "repairs_gbp_per_engine_hour": 30,
+    }
+    return params
+
+
 def stay_on_field_0(value, state, params):
     return np.zeros((1, value.shape[1]), dtype=int)
 
@@ -110,15 +126,18 @@ def go_to_depot(value, state, params):
 def one_combine_farm(n_fields, area_ha, start):
     """Settings for planning straight from a value matrix: one 1 ha/hour combine, 1 h drives.
 
-    Grain left at the end of the plan is worth nothing, unless a test changes it.
+    Grain left at the end of the plan is worth nothing, unless a test changes it. Going to the
+    depot must save more than £20.
     """
     params = demo_params()
     params.update(
         fields=[{"name": f"f{f}", "crop": "wheat", "area_ha": area_ha[f]} for f in range(n_fields)],
         machines=[{"name": "m0", "ha_per_hour": 1, "start": start}],
         travel_hours=(1 - np.eye(n_fields + 1)).tolist(),
-        mpc_idle_in_field_gbp_per_hour=20,
-        mpc_drive_gbp_per_hour=10,
+        idle_in_field_gbp_per_hour=20,
+        drive_gbp_per_hour=10,
+        depot_when_idle=True,
+        depot_margin_gbp=20,
         mpc_terminal_value_pct=0,
     )
     return params
@@ -198,6 +217,31 @@ def test_simulator_records_the_path_followed():
     assert result["place"][0] == pytest.approx([1, 1, 1, 1])  # heading for field 1 from hour 0
     assert result["driving"][0].tolist() == [True, True, False, False]  # 2 hours on the road
     assert result["harvesting"][0] == pytest.approx([WAIT, WAIT, 1, 1])
+
+
+def test_running_costs_follow_what_each_combine_does():
+    """Drive to field 1 for 2 hours (£70 each), then cut 1 ha in each of 2 hours (£55 each)."""
+    params, weather = tiny_farm()
+    round_running_costs(params)
+    result = run_season(weather, params, drive_to_field_1)
+    assert result["running_cost_gbp"][0] == pytest.approx([70, 70, 55, 55])
+    assert result["cut_ha"][0] == pytest.approx([0, 0, 1, 1])
+    breakdown = {"diesel": 2 * 20 + 2 * 10, "operator": 4 * 15, "escort": 2 * 5, "repairs": 4 * 30}
+    assert result["cost_breakdown_gbp"] == pytest.approx(breakdown)
+    assert result["total_gbp"] == pytest.approx(160)  # running costs don't change what's earned
+    assert result["net_gbp"] == pytest.approx(160 - 250)
+
+
+def test_waiting_in_a_field_pays_the_operator_and_the_depot_costs_nothing():
+    """Rain all day, so nothing can be cut. Left on field 0, the combine waits there and pays
+    its operator (£15 an hour). Sent home, it drives 2 hours (£70 each), then costs nothing."""
+    params, weather = tiny_farm()
+    round_running_costs(params)
+    weather["rain_mm"][:] = 5.0
+    waits = run_season(weather, params, stay_on_field_0)
+    assert waits["running_cost_gbp"][0] == pytest.approx([15, 15, 15, 15])
+    goes_home = run_season(weather, params, go_to_depot)
+    assert goes_home["running_cost_gbp"][0] == pytest.approx([70, 70, 0, 0])
 
 
 def test_simulator_replans_with_each_new_forecast():
@@ -342,7 +386,7 @@ def test_mpc_stays_home_when_the_field_is_dry_in_only_half_the_futures():
     (£15/ha every hour) cutting looks worth it. Played out in both members, an hour in the field
     earns £30 half the time and costs £40 idle the other half: -£5, so it stays at the depot."""
     params = one_combine_farm(1, [100], start="depot")
-    params.update(mpc_idle_in_field_gbp_per_hour=40, mpc_scenarios=50)
+    params.update(idle_in_field_gbp_per_hour=40, mpc_scenarios=50)
     by_member = np.zeros((2, 1, 6))  # [member, field, hour]
     by_member[0] = 30
     value = by_member.mean(axis=0)
@@ -350,6 +394,97 @@ def test_mpc_stays_home_when_the_field_is_dry_in_only_half_the_futures():
     assert plan_mpc(value, state, params)[0, 0] == 0  # average only: drives to the field
     state["value_by_member"] = by_member
     assert plan_mpc(value, state, params)[0] == pytest.approx([1] * 6)
+
+
+def test_idle_combine_waits_out_the_rain_at_the_depot():
+    """The rain case plan_mpc gets right above, for the other planners. Standing in the field
+    through hours 2-9 costs 8 x £20 = £160, home and back 2 x £10 = £20, so the combine goes home
+    (place 1) and leaves at hour 9 to be back for the dry hours. It cuts the same hours as before.
+    """
+    params = one_combine_farm(1, [100], start="f0")
+    value = np.zeros((1, 12))  # [field, hour]
+    value[0, [0, 1, 10, 11]] = 50
+    state = {"remaining_ha": np.array([100.0]), "machine_at": np.array([0])}
+    stay = np.zeros((1, 12), dtype=int)  # [machine, hour] on field 0 all day
+    schedule = send_idle_to_depot(stay, value, state, params)
+    assert schedule[0] == pytest.approx([0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0])
+    cut_before = follow_plan(stay, value, state, params)["cutting"]
+    assert (follow_plan(schedule, value, state, params)["cutting"] == cut_before).all()
+    # plan_vgreedy keeps the combine on its field, and its last step sends it home
+    assert plan_vgreedy(value, state, params)[0] == pytest.approx(schedule[0])
+    params.update(depot_when_idle=False)
+    assert send_idle_to_depot(stay, value, state, params)[0] == pytest.approx([0] * 12)
+
+
+def test_idle_combine_stays_for_a_short_gap():
+    """Rain in hours 2-3 only. Standing there costs 2 x £20 = £40, home and back £20: that saves
+    £20, not more than the £20 margin, so the combine stays. With no margin it goes home."""
+    params = one_combine_farm(1, [100], start="f0")
+    value = np.zeros((1, 6))  # [field, hour]
+    value[0, [0, 1, 4, 5]] = 50
+    state = {"remaining_ha": np.array([100.0]), "machine_at": np.array([0])}
+    stay = np.zeros((1, 6), dtype=int)
+    assert send_idle_to_depot(stay, value, state, params)[0] == pytest.approx([0] * 6)
+    params.update(depot_margin_gbp=0)
+    assert send_idle_to_depot(stay, value, state, params)[0] == pytest.approx([0, 0, 1, 0, 0, 0])
+
+
+def test_combine_with_nothing_left_to_cut_goes_home():
+    """2 ha, cut in hours 0-1. Then the field is empty: 4 more hours there cost £80, the drive
+    home £10, so it goes home and stays."""
+    params = one_combine_farm(1, [2], start="f0")
+    value = np.full((1, 6), 50.0)  # [field, hour]
+    state = {"remaining_ha": np.array([2.0]), "machine_at": np.array([0])}
+    stay = np.zeros((1, 6), dtype=int)
+    assert send_idle_to_depot(stay, value, state, params)[0] == pytest.approx([0, 0, 1, 1, 1, 1])
+
+
+def test_combine_waits_at_the_depot_and_leaves_just_in_time():
+    """The field is dry only in hours 4-5. Driving out at once and standing there for hours 1-3
+    costs £10 + £60; waiting at the depot and driving out at hour 3 costs £10."""
+    params = one_combine_farm(1, [100], start="depot")
+    value = np.zeros((1, 6))  # [field, hour]
+    value[0, 4:] = 50
+    state = {"remaining_ha": np.array([100.0]), "machine_at": np.array([1])}
+    drive_out = np.zeros((1, 6), dtype=int)  # [machine, hour] to field 0 from hour 0
+    schedule = send_idle_to_depot(drive_out, value, state, params)
+    assert schedule[0] == pytest.approx([1, 1, 1, 0, 0, 0])
+    cutting = follow_plan(schedule, value, state, params)["cutting"][0]  # [hour]
+    assert cutting.tolist() == [False, False, False, False, True, True]
+
+
+def test_depot_visits_never_change_which_hours_are_cut():
+    """On the demo forecast, for every planner that ends with send_idle_to_depot, starting at the
+    depot or in the fields: combines cut the same hours with and without the depot visits, and no
+    two are sent to one field."""
+    params = demo_params()
+    weather = load_forecast(ROOT / "data" / "forecast.csv", params)
+    n_fields, n_hours = len(params["fields"]), params["plan_hours"]
+    n_machines = len(params["machines"])
+    value = field_values(weather, start_moisture(weather, params), params)[:, :n_hours]
+    area = np.array([field["area_ha"] for field in params["fields"]], dtype=float)
+    plans = [
+        planners.plan_vgreedy,
+        planners.plan_urgencygreedy,
+        planners.plan_urgencygreedy_withlookahead,
+        plan_lagrangian,
+    ]
+    depot_visits = 0
+    for machine_at in [np.full(n_machines, n_fields), np.arange(n_machines)]:
+        state = {"remaining_ha": area, "machine_at": machine_at}
+        for plan in plans:
+            with_depot = plan(value, state, dict(params, depot_when_idle=True))
+            without = plan(value, state, dict(params, depot_when_idle=False))
+            cut_with = follow_plan(with_depot, value, state, params)["cutting"]
+            cut_without = follow_plan(without, value, state, params)["cutting"]
+            assert (cut_with == cut_without).all()
+            for hour in range(n_hours):
+                in_fields = [place for place in with_depot[:, hour] if 0 <= place < n_fields]
+                assert len(in_fields) == len(set(in_fields))
+            depot_visits += (with_depot != without).sum()
+    assert (
+        depot_visits > 0
+    )  # the pass did something on the demo, so the checks above mean something
 
 
 def test_member_values_average_to_field_values():
@@ -395,9 +530,10 @@ def test_no_planner_earns_more_than_the_lagrangian_bound():
     at_depot = np.full(len(params["machines"]), len(params["fields"]))
     schedule = plan_lagrangian(value, {"remaining_ha": area, "machine_at": at_depot}, params)
     assert schedule.shape == (len(params["machines"]), 48)
-    for hour in range(48):  # never two combines on one field
-        working = schedule[:, hour][schedule[:, hour] != -1]
-        assert len(working) == len(set(working))
+    n_fields = len(params["fields"])
+    for hour in range(48):  # never two combines on one field; the depot holds any number
+        in_fields = [place for place in schedule[:, hour] if 0 <= place < n_fields]
+        assert len(in_fields) == len(set(in_fields))
 
 
 def test_demo_runs_end_to_end():
@@ -405,6 +541,8 @@ def test_demo_runs_end_to_end():
     weather = load_forecast(ROOT / "data" / "forecast.csv", params, MOISTURE_CSV)
     result = run_season(weather, params)
     assert result["total_gbp"] > 0
+    assert 0 < result["net_gbp"] < result["total_gbp"]  # running costs, but less than earned
     assert result["remaining_ha"].min() >= 0
     assert result["harvesting"].shape == (len(params["machines"]), params["season_hours"])
+    assert result["running_cost_gbp"].shape == result["harvesting"].shape
     assert len(result["plans"]) == params["season_hours"] // params["sensor_every_hours"]

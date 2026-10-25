@@ -5,7 +5,7 @@ See README_greedy.md.
 
 import numpy as np
 
-from harvest.planners.common import WAIT
+from harvest.planners.common import WAIT, send_idle_to_depot
 
 
 def plan_vgreedy(value, state, params):
@@ -16,7 +16,8 @@ def plan_vgreedy(value, state, params):
     state:   {"remaining_ha": [field], "machine_at": [machine]}
              machine_at is a field index, or the number of fields for the depot
     params:  settings from params.yaml
-    returns: [machine, hour]  field index each machine should work on, or WAIT (-1)
+    returns: [machine, hour]  field index each machine should work on, the number of fields for
+                              the depot (send_idle_to_depot), or WAIT (-1)
     """
     n_fields, n_hours = value.shape
     machines = params["machines"]
@@ -33,7 +34,7 @@ def plan_vgreedy(value, state, params):
                 schedule[m, hour] = target[m]
                 if value[target[m], hour] > 0:
                     remaining[target[m]] -= machine["ha_per_hour"]
-    return schedule
+    return send_idle_to_depot(schedule, value, state, params)
 
 
 def plan_urgencygreedy(value, state, params):
@@ -45,7 +46,8 @@ def plan_urgencygreedy(value, state, params):
     state:   {"remaining_ha": [field], "machine_at": [machine]}
              machine_at is a field index, or the number of fields for the depot
     params:  settings from params.yaml
-    returns: [machine, hour]  field index each machine should work on, or WAIT (-1)
+    returns: [machine, hour]  field index each machine should work on, the number of fields for
+                              the depot (send_idle_to_depot), or WAIT (-1)
     """
     n_fields, n_hours = value.shape
     machines = params["machines"]
@@ -80,7 +82,7 @@ def plan_urgencygreedy(value, state, params):
                 if value[target[m], hour] > 0:
                     remaining[target[m]] -= machine["ha_per_hour"]
 
-    return schedule
+    return send_idle_to_depot(schedule, value, state, params)
 
 
 def plan_urgencygreedy_withlookahead(value, state, params):
@@ -93,7 +95,8 @@ def plan_urgencygreedy_withlookahead(value, state, params):
     state:   {"remaining_ha": [field], "machine_at": [machine]}
              machine_at is a field index, or the number of fields for the depot
     params:  settings from params.yaml
-    returns: [machine, hour]  field index each machine should work on, or WAIT (-1)
+    returns: [machine, hour]  field index each machine should work on, the number of fields for
+                              the depot (send_idle_to_depot), or WAIT (-1)
     """
     n_fields, n_hours = value.shape
     machines = params["machines"]
@@ -135,4 +138,4 @@ def plan_urgencygreedy_withlookahead(value, state, params):
                 if value[target[m], hour] > 0:
                     remaining[target[m]] -= machine["ha_per_hour"]
 
-    return schedule
+    return send_idle_to_depot(schedule, value, state, params)

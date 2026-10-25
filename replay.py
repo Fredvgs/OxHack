@@ -1,56 +1,42 @@
-"""Replay a past season: the forecasts that were really issued, and the weather that followed.
+"""Replay past days with one planner: the forecasts really issued, and the weather that followed.
 
-uv run python replay.py                              replay_start to replay_end in params.yaml
+uv run python replay.py                              rollout_start to rollout_end in params.yaml
 uv run python replay.py 2026-10-10 2026-10-25        your own dates (whole days, UTC, both included)
 uv run python replay.py 2026-10-10 2026-10-25 mpc    ... and another planner (any plan_* name)
 
 Every forecast_every_hours it takes the newest forecast run published by then and replans; every
-sensor_every_hours too, with a new grain moisture reading. Runs are downloaded the first time
-(needs internet) and then read from data/past_forecasts/. Machines harvest in the weather that
-really happened. At the end it prints the path each machine followed and plots it.
+sensor_every_hours too, with a new grain moisture reading. Runs and the weather are downloaded
+the first time (needs internet) and then read from data/past_forecasts/ and data/replay_weather/,
+so dates that are over replay offline after that. Machines harvest in the weather that really
+happened. At the end it prints the path each machine followed and plots it.
 """
 
 import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import pandas as pd
 import yaml
 
 from compare import PLANNERS
-from harvest.past_data import (
-    ONE_HOUR,
-    forecast_runs,
-    open_archive,
-    past_forecasts,
-    past_weather,
-    season_dates,
-)
+from harvest.past_data import ONE_HOUR, past_rollout, rollout_days
 from harvest.planners import WAIT
 from harvest.simulate import run_with_forecasts
 from run import plot_results, print_results
 
 ROOT = Path(__file__).parent
-DEFAULT_PLANNER = "urgencygreedy"  # the same one run.py uses
+DEFAULT_PLANNER = "mpc"
 
 
 def main():
     params = yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))
     args = sys.argv[1:]
-    start = pd.Timestamp(args[0] if len(args) >= 2 else params["replay_start"])
-    end = pd.Timestamp(args[1] if len(args) >= 2 else params["replay_end"])
+    start, end = rollout_days(args, params)
     name = args[2] if len(args) >= 3 else DEFAULT_PLANNER
     if name not in PLANNERS:
         sys.exit(f"Unknown planner {name!r}. Pick one of: {', '.join(PLANNERS)}")
 
-    archive = open_archive(params)
-    now = pd.Timestamp.now(tz="UTC").tz_localize(None)
-    first_hour, n_hours = season_dates(start, end, forecast_runs(archive), params, now)
-    end_time = first_hour + n_hours * ONE_HOUR
-    print(f"Replaying {first_hour:%Y-%m-%d %H:%M} to {end_time:%Y-%m-%d %H:%M} UTC with {name}")
-
-    truth = past_weather(first_hour, n_hours, params)  # {name: [1, field, hour]}
-    get_forecast, runs_used = past_forecasts(archive, first_hour, params)
+    print(f"Planner: {name}")
+    truth, get_forecast, first_hour, runs_used = past_rollout(start, end, params)
     result = run_with_forecasts(truth, get_forecast, params, PLANNERS[name])
 
     print()

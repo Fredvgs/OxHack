@@ -1,6 +1,9 @@
-"""Run the pipeline: load the forecast, simulate the season with replanning, show the results.
+"""Live run: simulate the season ahead on today's forecast, with replanning, and show the results.
 
 uv run python run.py
+
+The forecast is data/forecast.csv (uv run python data/download_forecast.py for a fresh one); one
+of its members plays the weather that really happens. Past days: replay.py and compare.py.
 """
 
 from pathlib import Path
@@ -12,7 +15,7 @@ import yaml
 from matplotlib.colors import ListedColormap
 
 from harvest.forecast import load_forecast
-from harvest.simulate import run_season
+from harvest.simulate import activities, run_season
 
 ROOT = Path(__file__).parent
 FORECAST_CSV = ROOT / "data" / "forecast.csv"
@@ -33,11 +36,24 @@ def main():
 def print_results(result, params):
     """Summary in the terminal."""
     print(f"Replanned {len(result['plans'])} times over {len(result['earned_gbp'])} hours")
-    print(f"Earned: GBP {result['total_gbp']:,.0f}")
+    costs = result["cost_breakdown_gbp"]  # {item: £}
+    items = ", ".join(f"{item} {gbp:,.0f}" for item, gbp in costs.items())
+    print(f"Earned:        GBP {result['total_gbp']:>9,.0f}")
+    print(f"Running costs: GBP {sum(costs.values()):>9,.0f}  ({items})")
+    print(f"Net:           GBP {result['net_gbp']:>9,.0f}")
     print()
     print(f"{'field':<15} {'harvested ha':>12} {'left ha':>8}")
     for field, left in zip(params["fields"], result["remaining_ha"]):
         print(f"{field['name']:<15} {field['area_ha'] - left:>12.1f} {left:>8.1f}")
+    print()
+    # {activity: [machine, hour] bool}
+    doing = activities(result["cut_ha"], result["driving"], result["place"], len(params["fields"]))
+    print(
+        f"{'machine':<15}" + "".join(f"{name + ' h':>11}" for name in doing) + f"{'cost GBP':>11}"
+    )
+    for m, machine in enumerate(params["machines"]):
+        hours = "".join(f"{doing[name][m].sum():>11}" for name in doing)  # one column per activity
+        print(f"{machine['name']:<15}{hours}{result['running_cost_gbp'][m].sum():>11,.0f}")
 
 
 def plot_results(result, params, start=None, marked_hours=None):
@@ -81,11 +97,13 @@ def plot_results(result, params, start=None, marked_hours=None):
     )
     fig.colorbar(image, ax=middle, ticks=range(n_fields)).ax.set_yticklabels(field_names)
 
-    # 3. money earned so far
-    bottom.plot(np.cumsum(result["earned_gbp"]))
-    bottom.set_ylabel("£ earned so far")
+    # 3. money so far, before and after running costs
+    bottom.plot(np.cumsum(result["earned_gbp"]), label="earned")
+    bottom.plot(np.cumsum(net_gbp_per_hour(result)), label="after running costs")
+    bottom.set_ylabel("£ so far")
     bottom.set_xlabel("hour")
-    bottom.set_title("Money earned")
+    bottom.set_title("Money earned, and what's left after running costs")
+    bottom.legend(frameon=False)
     # an empty colour bar slot, so all three charts are the same width and their hours line up
     fig.colorbar(image, ax=bottom).ax.set_visible(False)
 
@@ -95,6 +113,11 @@ def plot_results(result, params, start=None, marked_hours=None):
         mark_new_forecasts(ax, result, marked_hours)
     fig.tight_layout()
     return fig
+
+
+def net_gbp_per_hour(result):
+    """Money earned each hour minus what running every machine cost that hour. Returns [hour] £."""
+    return result["earned_gbp"] - result["running_cost_gbp"].sum(axis=0)
 
 
 def label_dates(ax, start, n_hours):

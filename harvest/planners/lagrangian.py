@@ -5,7 +5,7 @@ See README_lagrangian.md.
 
 import numpy as np
 
-from harvest.planners.common import WAIT
+from harvest.planners.common import WAIT, send_idle_to_depot
 
 # Lagrangian relaxation, from Adelman & Mersereau (2008), "Relaxations of Weakly Coupled Stochastic
 # Dynamic Programs", Operations Research 56(3): 712-727. Pages below are the journal's page numbers.
@@ -116,7 +116,8 @@ def plan_lagrangian(value, state, params):
     state:   {"remaining_ha": [field], "machine_at": [machine]}
              machine_at is a field index, or the number of fields for the depot
     params:  settings from params.yaml
-    returns: [machine, hour]  field index each machine should work on, or WAIT (-1)
+    returns: [machine, hour]  field index each machine should work on, the number of fields for
+                              the depot (send_idle_to_depot), or WAIT (-1)
     """
     n_fields, n_hours = value.shape
     machines = params["machines"]
@@ -175,4 +176,4 @@ def plan_lagrangian(value, state, params):
             if hour >= ready[m] and value[at[m], hour] > 0:
                 remaining[at[m]] = max(0, remaining[at[m]] - machine["ha_per_hour"])
 
-    return schedule
+    return send_idle_to_depot(schedule, value, state, params)

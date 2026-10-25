@@ -1,18 +1,31 @@
-# Every number the model uses lives in this file. Change anything here; no code edits needed.
-# Units are in the names: _gbp = £, _ha = hectares, _hours, _pct = %, _mm = millimetres.
+# Every number the model uses. Units are in the names: _gbp, _ha, _hours, _pct, _mm.
 
-#Simulation
-season_hours: 126       # run.py: how many hours we simulate, must fit in forecast_hours (126 = 21 replans)
-plan_hours: 126          # how far ahead each plan looks (must be >= sensor_every_hours)
-sensor_every_hours: 6    # a new moisture reading arrives this often, and we replan
-forecast_every_hours: 6  # we ask for the newest forecast this often, and replan (replay.py: a new run comes once a day)
-truth_member: 0          # run.py: forecast member that plays "the weather that really happened"
+# Simulation (run.py, replay.py, compare.py)
+plan_hours: 126              # how far ahead each plan looks, >= sensor_every_hours
+sensor_every_hours: 6        # replan on each new moisture reading
+forecast_every_hours: 6      # replan on each new forecast
 
-#Farm
-fields:   # lat/lon are only used to download a forecast.
-  # Demo farm: each field borrows the weather of a different European place, picked from 21 so
-  # the fields' rain and humidity differ as much as possible (fields near each other all get the
-  # same weather). travel_hours below is still a compact farm; it ignores these coordinates.
+# Live run (run.py)
+season_hours: 126            # hours simulated, must fit in forecast_hours
+truth_member: 0              # forecast member used as the real weather
+forecast_start: "2026-10-25T00:00"         # UTC, first hour of data/forecast.csv
+forecast_hours: 127
+forecast_model: ecmwf_ifs_europe_ensemble  # ECMWF IFS 9 km, 51 members
+past_weather_days: 21        # days of past weather before forecast_start
+
+# Past rollouts (replay.py, compare.py). Dates on the command line override these.
+rollout_start: "2026-10-10"
+rollout_end: "2026-10-25"    # inclusive
+past_forecast_dataset: ecmwf-ifs-ens-forecast-15-day-0-25-degree  # dynamical.org, 00 UTC runs
+forecast_delay_hours: 8      # the 00 UTC run is published around 08 UTC
+forecast_run_every_hours: 24
+magnus_a: 17.625             # dew point to humidity (Alduchov & Eskridge 1996)
+magnus_b_c: 243.04
+past_weather_model: ecmwf_ifs  # Open-Meteo record of what actually happened
+
+# Farm. Each field borrows a different European city's weather so they differ; lat/lon are
+# only used for downloads and travel_hours is a made-up compact farm.
+fields:
   - {name: inverness_uk,  crop: wheat,  area_ha: 40, lat: 57.48, lon: -4.22}
   - {name: cork_ie,       crop: barley, area_ha: 35, lat: 51.90, lon: -8.47}
   - {name: valladolid_es, crop: wheat,  area_ha: 30, lat: 41.65, lon: -4.72}
@@ -20,13 +33,12 @@ fields:   # lat/lon are only used to download a forecast.
   - {name: bergen_no,     crop: wheat,  area_ha: 25, lat: 60.39, lon: 5.32}
   - {name: cherkasy_ua,   crop: barley, area_ha: 30, lat: 49.40, lon: 32.00}
 
-machines:  # start = "depot" or a field name
+machines:  # start: depot or a field name
   - {name: combine_a, ha_per_hour: 3.0, start: depot}
   - {name: combine_b, ha_per_hour: 2.5, start: depot}
   - {name: combine_c, ha_per_hour: 2.0, start: depot}
 
-# Driving time in hours. Rows and columns: the fields in the order above, then the depot last.
-# The simulator rounds up to whole hours.
+# Fields in the order above, then the depot. Rounded up to whole hours.
 travel_hours:
   - [0.00, 0.50, 0.50, 0.50, 1.00, 0.75, 0.25]
   - [0.50, 0.00, 1.00, 1.00, 1.00, 1.00, 0.75]
@@ -36,131 +48,94 @@ travel_hours:
   - [0.75, 1.00, 1.00, 0.50, 0.50, 0.00, 0.50]
   - [0.25, 0.75, 0.50, 0.25, 0.75, 0.50, 0.00]
 
-#Crops
 crops:
   wheat:  {price_gbp_per_t: 190, yield_t_per_ha: 8.5}
   barley: {price_gbp_per_t: 170, yield_t_per_ha: 7.0}
 
-#Value function (harvest/value.py)
-# TODO: remove once the moisture vs time graph gives each field's grain moisture at hour 0
-temp_start_moisture_pct: 18          # placeholder, same for every field
-# Drying: Camgrain charges, harvest 2026 (https://www.camgrain.co.uk/charges-for-2025)
-target_moisture_pct: 14.0             # the store dries grain down to this
-weight_loss_pct_per_pct: 1.25         # % of weight the store deducts per point of moisture removed
-free_drying_up_to_pct: 15.0           # no drying charge at or below this
-drying_band_pct: 0.5                  # the charge goes up in bands this wide...
-drying_charge_gbp_per_band: 2.0       # ...by this much per tonne per band
-max_harvest_moisture_pct: 25          # too wet to combine above this
-min_moisture_pct: 12                  # grain never dries below this in the field
-drying_pct_per_hour: 0.3              # drying per hour in bone-dry air (scaled by (100 - humidity) / 100)
-rewetting_pct_per_mm: 0.5             # moisture gained per mm of rain
-rain_limit_mm: 0.2                    # no harvesting in an hour with more rain than this
-loss_pct_per_hour: 0.05               # crop value lost per hour it stays in the field
+# Value function (harvest/value.py). Drying charges from Camgrain, harvest 2026.
+temp_start_moisture_pct: 18        # TODO: replace with the moisture model's hour 0
+target_moisture_pct: 14.0
+weight_loss_pct_per_pct: 1.25      # weight deducted per point dried
+free_drying_up_to_pct: 15.0
+drying_band_pct: 0.5
+drying_charge_gbp_per_band: 2.0    # per tonne
+max_harvest_moisture_pct: 25       # too wet to combine above this
+min_moisture_pct: 12
+drying_pct_per_hour: 0.3           # in dry air, scaled by (100 - humidity) / 100
+rewetting_pct_per_mm: 0.5
+rain_limit_mm: 0.2                 # no cutting in an hour wetter than this
+loss_pct_per_hour: 0.05            # crop value lost per hour left standing
 
-#Planner: plan_lagrangian (harvest/planners/lagrangian.py)
-lagrangian_iterations: 300            # price updates per plan (subgradient steps)
-lagrangian_first_step_gbp_per_ha: 50  # size of the first price update; step k is this / k
-lagrangian_wait_margin_gbp_per_ha: 5  # only wait for a later hour if it's worth this much more per ha
+# Running costs (harvest/simulate.py): what every plan is scored with, per combine-hour.
+#   cutting: diesel + operator + repairs     driving: diesel + operator + escort + repairs
+#   waiting in a field: operator only        at the depot: nothing
+running_costs:
+  diesel_gbp_per_litre: 1.00           # red diesel ex VAT, UK average June 2026
+  cutting_diesel_litres_per_ha: 15     # published figures run 11-20 l/ha
+  road_diesel_litres_per_hour: 20      # ~12 mph at ~1 l/km (Masek et al. 2015)
+  operator_gbp_per_hour: 19            # ~£15/h pay plus employer NI and holiday pay
+  road_escort_gbp_per_hour: 25         # required over 3.5 m wide; pay plus their vehicle
+  repairs_gbp_per_engine_hour: 31      # 23% of a £400k list price over 3,000 h (Calcante et al. 2013)
 
-#Planner: plan_mpc (harvest/planners/mpc.py)
-# The two costs only steer the plan; simulate.py's £ earned doesn't include them. Made-up numbers.
-mpc_scenarios: 50                     # forecast members each plan is scored in; 0 = the average only
-mpc_rounds: 5                         # most times each combine re-plans its route around the others
-mpc_route_passes: 3                   # tries per re-plan, each one knowing which fields the last emptied
-mpc_idle_in_field_gbp_per_hour: 20    # a combine parked in a field with nothing to cut (0 at the depot)
-mpc_drive_gbp_per_hour: 10            # fuel and wear while driving between places
-mpc_terminal_hours: 24                # grain standing when the plan ends is worth its average value
-mpc_terminal_value_pct: 100           # over the plan's last this-many hours, times this %
+# Planner costs: rough numbers the planners steer by. Scoring uses running_costs.
+idle_in_field_gbp_per_hour: 20
+drive_gbp_per_hour: 10
+depot_when_idle: true              # send idle combines home if cheaper (every planner but mpc)
+depot_margin_gbp: 20               # only if it saves more than this
 
-#Grain moisture model (harvest/moisture.py). The pipeline reads its output, outputs/moisture_forecast.csv.
-# Temperatures in °C, RH as a decimal (0.65 = 65%), moisture inside the model is dry basis (kg/kg).
+# plan_lagrangian
+lagrangian_iterations: 300
+lagrangian_first_step_gbp_per_ha: 50  # step k is this / k
+lagrangian_wait_margin_gbp_per_ha: 5  # only wait for a later hour if it gains this much
+
+# plan_mpc
+mpc_scenarios: 50                  # forecast members each plan is scored in; 0 = mean only
+mpc_rounds: 5                      # route re-plans per combine
+mpc_route_passes: 3                # tries per re-plan
+mpc_terminal_hours: 24             # grain left at the end is worth its mean value over these hours,
+mpc_terminal_value_pct: 100        # times this
+
+# Grain moisture model (harvest/moisture.py), writes outputs/moisture_forecast.csv.
+# °C, RH as a fraction, moisture dry basis (kg/kg).
 moisture_model:
   gas_constant_j_per_mol_k: 8.314
   kelvin_offset: 273.15
-  rh_min: 0.05                        # RH is clipped to [rh_min, rh_max]: Henderson blows up as RH -> 1
-  rh_max: 0.95                        # (and was only fitted for 35-85% RH, -2 to 28 °C)
-  # Rain rule: in a rain hour, REPLACE the drying step with a fixed rise, capped:
-  #   m_db = min(m_db + rain_rise_per_hour * rain_rise_scale * dt, rain_max_mc)  (dry hours unchanged)
-  #   Source: Smith, Bailey & Ingram (1981), J. agric. Engng Res. 26: 171-178, eqns 6a and 6b.
-  #   Fitted with their own k and EMC, so pairing it with the Henderson/Arrhenius values below is
-  #   NOT validated. It depends on how long it rains, not how much.
-  rain_rise_per_hour: 0.028           # kg/kg dry basis per rain hour. Eqn 6a; 95% CI ±0.003, fitted
-                                      # to 44 rain periods in Bedfordshire barley data (1951-53)
-  rain_max_mc: 0.52                   # kg/kg dry basis (about 34% wet basis). Eqn 6b; from one
-                                      # prolonged heavy-rain period
-  rain_threshold_mm: 0.3              # mm per hour. Chosen by the project owner. Not from Smith et
-                                      # al. (1981), who used rain-gauge readings and gave no
-                                      # threshold. Lies between 0.1 mm/h (lowest light-rain category
-                                      # in Yr's scale) and 0.5 mm/h. A rain hour is one with
-                                      # rain_mm >= threshold (and rain_mm > 0).
+  rh_min: 0.05                     # Henderson blows up as RH -> 1
+  rh_max: 0.95
+  # A rain hour replaces drying with a capped rise (Smith, Bailey & Ingram 1981, eqns 6a, 6b):
+  #   m = min(m + rain_rise_per_hour * rain_rise_scale, rain_max_mc)
+  rain_rise_per_hour: 0.028
+  rain_max_mc: 0.52                # ~34% wet basis
+  rain_threshold_mm: 0.3           # our choice, not from the paper
+  # EMC (modified Henderson) fitted to the PAMI charts; drying rate (Lewis, Arrhenius) from
+  # Noroña et al. dryer tests at 40-60 °C. start_moisture_pct (% wet basis) are placeholders.
   crops:
-    # Equilibrium moisture, modified Henderson: EMC_db% = (-ln(1 - RH) / (K (T + C)))^(1/N)
-    #   Source: NOT the official ASABE D245.7 values (paywalled). K, C, N fitted by non-linear least
-    #   squares to the PAMI "Equilibrium Moisture Content Charts for Grain Storage Management"
-    #   (built from ASAE D245.5 data), read as wet basis and converted to dry basis. Fit error
-    #   <= 0.05 points wb. K and C trade off, so don't read them individually. To use D245.7, replace
-    #   henderson_k/c/n here.
-    # start_moisture_pct: grain moisture (% wet basis) at hour 0 of the forecast. PLACEHOLDERS for
-    #   now, replace with a field reading when there is one.
-    # rain_rise_scale: multiplies rain_rise_per_hour for this crop. 0 switches the rain response off,
-    #   values between 0 and 1 scale it down. Wheat and barley: Smith, Bailey & Ingram (1981) eqn 6a,
-    #   applied unchanged (fitted to barley data).
-    # Drying rate, Arrhenius: k = k_ref exp(-(Ea/R)(1/T_K - 1/T_ref_K)), in 1/hour (Lewis model)
-    #   Source (wheat, barley): Noroña et al., "Drying kinetics of wheat, barley and maize grain":
-    #   k_ref = slope of ln(MR) vs t at 40 °C (Table 1), Ea from their Arrhenius fit of Deff (Table 3).
-    #   Forced-air dryer tests at 40-60 °C, ~6% RH, so 0-30 °C in the field is an extrapolation.
     wheat:  {henderson_k: 2.2846e-5, henderson_c: 55.990,  henderson_n: 2.2876,
              k_ref_per_hour: 0.1255, t_ref_c: 40, ea_j_per_mol: 50630, start_moisture_pct: 10,
-             rain_rise_scale: 1.0}  # Smith et al. (1981) eqn 6a, unchanged (fitted to barley)
+             rain_rise_scale: 1.0}
     barley: {henderson_k: 2.2451e-5, henderson_c: 197.489, henderson_n: 2.0160,
              k_ref_per_hour: 0.1653, t_ref_c: 40, ea_j_per_mol: 55890, start_moisture_pct: 10,
-             rain_rise_scale: 1.0}  # Smith et al. (1981) eqn 6a, unchanged (fitted to barley)
-    # oilseed rape (canola). k_ref_per_hour is a PLACEHOLDER: copied from wheat, no sourced value.
-    #   Ea from rapeseed thin-layer drying studies ("Thin layer drying rate and loss of viability
-    #   modelling for rapeseed (canola)"; a later study gives 27,860 J/mol).
-    #   rain_rise_scale: ASSUMPTION, no published source. Smith et al.'s rule, fitted to barley,
-    #   applied to rapeseed by analogy. Replace with data from Sokhansanj, Singh & Wasserman (1984),
-    #   Trans. ASAE 27(3): 903-906 when available. 0 switches the rain response off, values between
-    #   0 and 1 scale it down.
+             rain_rise_scale: 1.0}
+    # Oilseed rape: k_ref copied from wheat, rain response assumed the same as barley.
     osr:    {henderson_k: 5.0569e-4, henderson_c: 39.978,  henderson_n: 1.5714,
              k_ref_per_hour: 0.126,  t_ref_c: 40, ea_j_per_mol: 28470, start_moisture_pct: 8,
-             rain_rise_scale: 1.0}  # ASSUMPTION, see above
+             rain_rise_scale: 1.0}
 
-# Synthetic weather and ranges (made-up numbers) for scripts/plot_moisture_demo.py and
-# scripts/moisture_sensitivity.py
+# Made-up weather for scripts/plot_moisture_demo.py and scripts/moisture_sensitivity.py
 moisture_demo:
   days: 7
   mean_temp_c: 15
-  temp_swing_c: 6                     # temperature goes this far above and below the mean each day
-  warmest_hour: 15                    # hour of day with the highest temperature and lowest RH
+  temp_swing_c: 6                  # daily swing either side of the mean
+  warmest_hour: 15                 # also the driest
   mean_rh: 0.75
-  rh_swing: 0.18                      # RH goes this far above and below the mean each day
-  rain_spells: [[60, 3], [110, 6]]    # [first hour, number of hours] of each spell of rain
-  rain_mm_per_hour: 1.0               # rain during those hours
-  ea_range_j_per_mol: [30000, 55000]  # sensitivity: Ea values tried, evenly spaced...
-  ea_steps: 6                         # ...this many of them
-  k_ref_scales: [0.5, 1.5]            # sensitivity: k_ref multiplied by each of these (±50%)
+  rh_swing: 0.18
+  rain_spells: [[60, 3], [110, 6]] # [start hour, length]
+  rain_mm_per_hour: 1.0
+  ea_range_j_per_mol: [30000, 55000]
+  ea_steps: 6
+  k_ref_scales: [0.5, 1.5]
 
-# Values tried by scripts/rain_sensitivity.py (on data/forecast.csv). params above are not changed by it.
+# Values tried by scripts/rain_sensitivity.py
 rain_sensitivity:
-  thresholds_mm: [0.0, 0.3, 0.5]      # rain_threshold_mm, every crop
-  osr_rain_rise_scales: [0, 0.75, 1.0]  # oilseed rape rain_rise_scale
-
-#Forecast download (only used by data/download_forecast.py)
-forecast_start: "2026-10-25T00:00"    # UTC, first hour of data/forecast.csv
-forecast_hours: 127                   # all the 9 km model gives from forecast_start (~144 h past its run)
-forecast_model: ecmwf_ifs_europe_ensemble  # ECMWF IFS native 9 km ensemble, 51 members
-
-#Past weather download (data/download_past_weather.py, and replay.py for the weather that happened)
-past_weather_days: 21                 # whole days before forecast_start
-past_weather_model: ecmwf_ifs         # same 9 km grid as forecast_model; the ensemble keeps no past data
-
-#Replay a past season (replay.py): the forecasts that were really issued, and the weather that followed
-replay_start: "2026-10-10"            # first day, from 00:00 UTC. `uv run python replay.py START END` overrides both
-replay_end: "2026-10-25"              # last day, included; cut back to the last hour that has happened
-# dynamical.org archive: ECMWF ensemble, 51 members, 0.25° grid, the 00 UTC run of every day since 2024-04-01
-past_forecast_dataset: ecmwf-ifs-ens-forecast-15-day-0-25-degree
-forecast_delay_hours: 8               # a run starting at 00 UTC reaches users from about 08:00 UTC (ECMWF dissemination)
-# The archive has dew point, not humidity. Magnus formula constants (Alduchov & Eskridge 1996)
-magnus_a: 17.625
-magnus_b_c: 243.04
+  thresholds_mm: [0.0, 0.3, 0.5]
+  osr_rain_rise_scales: [0, 0.75, 1.0]

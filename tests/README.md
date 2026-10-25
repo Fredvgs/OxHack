@@ -15,6 +15,8 @@ uv run pytest
   - driving to field 1 earns £160, because 2 hours are lost to driving;
   - the planner finds the £200;
 - the simulator records the path (where each machine is, and when it's driving);
+- running costs follow what each combine does: driving, cutting, waiting in a field (the
+  operator only) and the depot (nothing), and they come off the £ earned to give `net_gbp`;
 - a new forecast mid-season makes it replan, and the machine follows the new plan;
 - with temperature in the forecast, grain moisture comes from the moisture model, starting at the reading;
 - the full demo runs end to end.
@@ -26,8 +28,11 @@ downloads:
 - humidity from the dew point matches the tables;
 - a run is only used once it's published, and an incomplete newest run falls back to the one before;
 - replay dates are cut, with a warning, to the forecast archive and to the past;
-- a saved run is read back without downloading, unless its field moved;
-- past weather gives each hour the rain that fell during it.
+- the saved list of runs is used without opening the archive, unless a newer run could be out before the replay ends;
+- a saved run, and saved past weather, are read back without downloading, unless a field moved;
+- past weather gives each hour the rain that fell during it;
+- a past rollout gives `run_with_forecasts` a season of the right length, with each day's run coming
+  in at the first replan after it's published.
 
 `test_moisture.py` checks the grain moisture model (`harvest/moisture.py`):
 

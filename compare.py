@@ -1,12 +1,17 @@
-"""Run every planner on the same forecast and compare them.
+"""Run every planner on the same past days and compare them.
 
-uv run python compare.py
+uv run python compare.py                         rollout_start to rollout_end in params.yaml
+uv run python compare.py 2026-10-10 2026-10-24   your own dates (whole days, UTC, both included)
 
+Each planner replays the same days as replay.py does: the forecasts that were really issued, and
+the weather that really happened (needs internet the first time, see harvest/past_data.py).
 Every `plan_*` function listed in `__all__` in harvest/planners/__init__.py is picked up
 automatically, so a new planner shows up here as soon as you add it there. Each planner gets the
-standard run.py window, then one extra window puts them all side by side.
+standard run.py window, then one extra window puts them all side by side. Planners are ranked by
+net £: money earned minus running costs (running_costs in params.yaml), the same for every planner.
 """
 
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -14,9 +19,9 @@ import numpy as np
 import yaml
 
 from harvest import planners
-from harvest.forecast import load_forecast
-from harvest.simulate import run_season
-from run import FORECAST_CSV, MOISTURE_CSV, mark_new_forecasts, plot_results
+from harvest.past_data import past_rollout, rollout_days
+from harvest.simulate import activities, run_with_forecasts
+from run import label_dates, mark_new_forecasts, net_gbp_per_hour, plot_results
 
 ROOT = Path(__file__).parent
 
@@ -34,53 +39,78 @@ GREY = "#8a8984"
 
 def main():
     params = yaml.safe_load((ROOT / "params.yaml").read_text(encoding="utf-8"))
-    weather = load_forecast(FORECAST_CSV, params, MOISTURE_CSV)
-    results = {name: run_season(weather, params, function) for name, function in PLANNERS.items()}
-    print_comparison(results)
+    start, end = rollout_days(sys.argv[1:], params)
+    truth, get_forecast, first_hour, runs_used = past_rollout(start, end, params)
+    # every planner gets the same forecasts; each run is only loaded once
+    results = {}
+    for name, function in PLANNERS.items():
+        print(f"running {name}...")
+        results[name] = run_with_forecasts(truth, get_forecast, params, function)
+    new_runs = list(runs_used)  # season hours a new forecast run came in
+
+    print()
+    print_comparison(results, params)
     for name, result in results.items():
-        fig = plot_results(result, params)
-        fig.suptitle(name)
+        fig = plot_results(result, params, start=first_hour, marked_hours=new_runs)
+        fig.suptitle(f"{name} (dashed line = a new forecast run)")
         fig.canvas.manager.set_window_title(name)
         fig.tight_layout()
-    plot_comparison(results)
+    plot_comparison(results, first_hour, new_runs)
     plt.show()
 
 
-def print_comparison(results):
-    """One row per planner, best first."""
-    print(f"{'planner':<20} {'GBP earned':>12} {'ha left':>8}")
-    for name in sorted(results, key=lambda name: -results[name]["total_gbp"]):
+def print_comparison(results, params):
+    """One row per planner, best net first. Hours are added up over all the machines."""
+    columns = ["GBP net", "GBP earned", "GBP costs", "ha left", "driving h", "waiting h", "depot h"]
+    print(f"{'planner':<34}" + "".join(f"{column:>11}" for column in columns))
+    for name in sorted(results, key=lambda name: -results[name]["net_gbp"]):
         result = results[name]
-        print(f"{name:<20} {result['total_gbp']:>12,.0f} {result['remaining_ha'].sum():>8.1f}")
+        # {activity: [machine, hour] bool}
+        doing = activities(
+            result["cut_ha"], result["driving"], result["place"], len(params["fields"])
+        )
+        money = [result["net_gbp"], result["total_gbp"], result["running_cost_gbp"].sum()]
+        hours = [doing[activity].sum() for activity in ("driving", "waiting", "depot")]
+        print(
+            f"{name:<34}"
+            + "".join(f"{gbp:>11,.0f}" for gbp in money)
+            + f"{result['remaining_ha'].sum():>11.1f}"
+            + "".join(f"{hour:>11}" for hour in hours)
+        )
 
 
-def plot_comparison(results):
-    """Money earned hour by hour and in total, every planner in one window."""
+def plot_comparison(results, start, marked_hours):
+    """Net £ (earned minus running costs) hour by hour and in total, every planner in one window.
+
+    start:        Timestamp of hour 0, to label the hour axis with dates
+    marked_hours: hours to mark with a dashed line (a new forecast run)
+    """
     # colour follows the planner, so it matches between the two charts
     colour = {name: COLOURS[i] if i < len(COLOURS) else GREY for i, name in enumerate(results)}
     fig, (top, bottom) = plt.subplots(2, 1, figsize=(10, 8))
     fig.canvas.manager.set_window_title("Planner comparison")
 
-    # 1. money earned so far, one line per planner
+    # 1. net money so far, one line per planner
     for name, result in results.items():
-        top.plot(np.cumsum(result["earned_gbp"]), color=colour[name], linewidth=2, label=name)
-    top.set_xlabel("hour")
-    top.set_ylabel("£ earned so far")
-    top.set_title("Money earned over the season")
+        net_so_far = np.cumsum(net_gbp_per_hour(result))  # [hour] £
+        top.plot(net_so_far, color=colour[name], linewidth=2, label=name)
+    top.set_ylabel("£ net so far")
+    top.set_title("Money earned minus running costs, over the season")
     top.yaxis.set_major_formatter("{x:,.0f}")
     top.grid(axis="y", alpha=0.3)
-    mark_new_forecasts(top, result)  # every planner replans at the same hours
+    label_dates(top, start, len(result["earned_gbp"]))
+    mark_new_forecasts(top, result, marked_hours)  # the same hours for every planner
     top.legend(frameon=False)
 
-    # 2. season total per planner, best at the top (barh draws the first bar at the bottom)
-    ranked = sorted(results, key=lambda name: results[name]["total_gbp"])
-    totals = [results[name]["total_gbp"] for name in ranked]
+    # 2. season net per planner, best at the top (barh draws the first bar at the bottom)
+    ranked = sorted(results, key=lambda name: results[name]["net_gbp"])
+    totals = [results[name]["net_gbp"] for name in ranked]
     bars = bottom.barh(ranked, totals, color=[colour[name] for name in ranked])
     bottom.bar_label(bars, labels=[f"£{total:,.0f}" for total in totals], padding=4)
     bottom.margins(x=0.15)  # room for the labels
     bottom.xaxis.set_major_formatter("{x:,.0f}")
-    bottom.set_xlabel("£ earned")
-    bottom.set_title("Total for the season")
+    bottom.set_xlabel("£ net (earned minus running costs)")
+    bottom.set_title("Net for the season")
 
     for ax in (top, bottom):
         ax.spines[["top", "right"]].set_visible(False)

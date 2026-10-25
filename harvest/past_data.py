@@ -1,4 +1,6 @@
-"""Past forecasts, and the weather that really followed, for replaying a past season (replay.py).
+"""Past forecasts, and the weather that really followed, for past rollouts (replay.py, compare.py).
+
+past_rollout() gives everything run_with_forecasts needs; the rest of this file is what it uses.
 
 Past forecasts: dynamical.org keeps every 00 UTC run of the ECMWF ensemble (51 members, 0.25°
 grid) since 2024-04-01: https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/
@@ -8,6 +10,9 @@ turns that into one value per hour.
 
 Past weather: Open-Meteo's archive of ECMWF's own 9 km forecasts, the first hours of each run
 stitched together, hourly: https://open-meteo.com/en/docs/historical-forecast-api
+Saved in data/replay_weather/ the first time, too.
+
+So a replay of dates that are over goes online only the first time.
 """
 
 from pathlib import Path
@@ -22,6 +27,7 @@ from harvest.forecast import sort_by_field
 
 ROOT = Path(__file__).parent.parent
 FORECAST_DIR = ROOT / "data" / "past_forecasts"
+WEATHER_DIR = ROOT / "data" / "replay_weather"
 WEATHER_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 SECONDS_PER_HOUR = 3600
 ONE_HOUR = pd.Timedelta(hours=1)
@@ -41,14 +47,71 @@ WEATHER_VARIABLES = {
 }
 
 
+def rollout_days(args, params):
+    """First and last day of a past rollout: the command line's START END, or params.yaml's.
+
+    args: the command-line arguments, e.g. ["2026-10-10", "2026-10-24", ...]
+    returns: (first day, last day) as Timestamps (whole days, UTC, both included)
+    """
+    if len(args) >= 2:
+        return pd.Timestamp(args[0]), pd.Timestamp(args[1])
+    return pd.Timestamp(params["rollout_start"]), pd.Timestamp(params["rollout_end"])
+
+
+def past_rollout(start, end, params):
+    """Everything run_with_forecasts needs to replay the days start to end (UTC, both included).
+
+    The days are cut, with a warning, to what the archives have and to hours that have happened.
+    returns: (truth, get_forecast, first_hour, runs_used)
+             truth:        {"temp_c", "humidity_pct", "rain_mm"}: [1, field, hour] (past_weather)
+             get_forecast: function(hour) -> the newest run by then (past_forecasts)
+             first_hour:   Timestamp of season hour 0
+             runs_used:    {season hour: start time of the run that was new at that hour}, filled
+                           in as the first season runs
+    """
+    runs = forecast_runs(end, params)
+    now = pd.Timestamp.now(tz="UTC").tz_localize(None)
+    first_hour, n_hours = season_dates(start, end, runs, params, now)
+    end_time = first_hour + n_hours * ONE_HOUR
+    print(f"Replaying {first_hour:%Y-%m-%d %H:%M} to {end_time:%Y-%m-%d %H:%M} UTC")
+    truth = past_weather(first_hour, n_hours, params)
+    get_forecast, runs_used = past_forecasts(runs, first_hour, params)
+    return truth, get_forecast, first_hour, runs_used
+
+
+opened = {}  # dataset name -> archive, so it's opened at most once per program run
+
+
 def open_archive(params):
-    """Open the archive of past forecasts (takes a few seconds; data is only fetched when read)."""
-    return dynamical_catalog.open(params["past_forecast_dataset"], chunks=None)
+    """The archive of past forecasts, opened the first time it's needed.
+
+    Opening it takes a few seconds online; data is only fetched when read.
+    """
+    name = params["past_forecast_dataset"]
+    if name not in opened:
+        print("opening the forecast archive...")
+        opened[name] = dynamical_catalog.open(name, chunks=None)
+    return opened[name]
 
 
-def forecast_runs(archive):
-    """Start times of every run in the archive, oldest first (UTC)."""
-    return pd.DatetimeIndex(archive["init_time"].values)
+def forecast_runs(end, params):
+    """Start times of the runs in the archive, oldest first (UTC), at least up to day `end`.
+
+    The archive's list is saved in data/past_forecasts/ every time it's read. The archive only
+    adds newer runs, so the saved list is enough if the run after its newest one would only be
+    published after `end`: a replay ending on `end` can't use it. Otherwise the archive is opened.
+    """
+    path = FORECAST_DIR / params["past_forecast_dataset"] / "runs.csv"
+    every = pd.Timedelta(hours=params["forecast_run_every_hours"])
+    delay = pd.Timedelta(hours=params["forecast_delay_hours"])
+    if path.exists():
+        runs = pd.DatetimeIndex(pd.read_csv(path, parse_dates=["run"])["run"])
+        if runs[-1] + every + delay >= end.normalize() + pd.Timedelta(days=1):
+            return runs
+    runs = pd.DatetimeIndex(open_archive(params)["init_time"].values)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"run": runs}).to_csv(path, index=False)
+    return runs
 
 
 def published_runs(time, runs, params):
@@ -97,16 +160,16 @@ def season_dates(start, end, runs, params, now):
     return first, (last - first) // ONE_HOUR + 1
 
 
-def past_forecasts(archive, first_hour, params):
+def past_forecasts(runs, first_hour, params):
     """The function run_with_forecasts asks for forecasts: get_forecast(hour).
 
     get_forecast(hour) returns the newest run published by that season hour, from that hour on:
     {"temp_c", "humidity_pct", "rain_mm"}: [member, field, hour].
+    runs:       start times of the forecast runs in the archive (from forecast_runs)
     first_hour: Timestamp of season hour 0
     returns: (get_forecast, runs_used); runs_used fills up as the season runs:
              {season hour: start time of the run that was new at that hour}
     """
-    runs = forecast_runs(archive)
     loaded = {}  # run start time -> {name: [member, field, hour since the run started]} or None
     runs_used = {}
 
@@ -115,7 +178,7 @@ def past_forecasts(archive, first_hour, params):
         run = None
         for candidate in reversed(published_runs(time, runs, params)):  # newest first
             if candidate not in loaded:
-                loaded[candidate] = load_run(archive, candidate, params)
+                loaded[candidate] = load_run(candidate, params)
                 if loaded[candidate] is None:
                     print(
                         f"warning: the {candidate:%Y-%m-%d %H:%M} run isn't all in the archive "
@@ -135,17 +198,17 @@ def past_forecasts(archive, first_hour, params):
     return get_forecast, runs_used
 
 
-def load_run(archive, run, params):
+def load_run(run, params):
     """One past run at every field, hourly: {name: [member, field, hour since the run started]}.
 
     Read from data/past_forecasts/ if it was saved before for the same fields, otherwise
     downloaded and saved there first. None if the archive doesn't have all of it yet.
     """
     path = FORECAST_DIR / params["past_forecast_dataset"] / f"{run:%Y-%m-%dT%H}.csv"
-    table = saved_run(path, params)
+    table = saved_table(path, params)
     if table is None:
         print(f"downloading the {run:%Y-%m-%d %H:%M} run...")
-        table = download_run(archive, run, params)
+        table = download_run(open_archive(params), run, params)
         if not is_complete(table):
             return None
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -154,8 +217,8 @@ def load_run(archive, run, params):
     return to_hourly(steps, np.sort(table["hour"].unique()), params)
 
 
-def saved_run(path, params):
-    """The run saved at path, or None if there isn't one for these fields' lat/lon."""
+def saved_table(path, params):
+    """The run or weather saved at path, or None if there isn't one for these fields' lat/lon."""
     if not path.exists():
         return None
     table = pd.read_csv(path)
@@ -252,8 +315,24 @@ def relative_humidity_pct(temp_c, dew_point_c, params):
 def past_weather(first_hour, n_hours, params):
     """The weather that really happened at every field, hourly from first_hour.
 
+    Read from data/replay_weather/ if these hours were saved before for the same fields,
+    otherwise downloaded from Open-Meteo and saved there first.
     returns: {"temp_c", "humidity_pct", "rain_mm"}: [1, field, hour] (one member: one past)
     """
+    folder = WEATHER_DIR / params["past_weather_model"]
+    path = folder / f"{first_hour:%Y-%m-%dT%H}_{n_hours}h.csv"
+    table = saved_table(path, params)
+    if table is None:
+        print("downloading the weather that happened...")
+        locations = download_weather(first_hour, n_hours, params)
+        table = weather_from_open_meteo(locations, first_hour, n_hours, params)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        table.to_csv(path, index=False)
+    return to_arrays(table, WEATHER_VARIABLES.values(), params)
+
+
+def download_weather(first_hour, n_hours, params):
+    """Open-Meteo's hourly answer for every field, from first_hour's day: one dict per field."""
     fields = params["fields"]
     # up to one hour past the end: Open-Meteo gives the rain of the hour BEFORE each time
     end = first_hour + n_hours * ONE_HOUR
@@ -273,13 +352,15 @@ def past_weather(first_hour, n_hours, params):
     locations = response.json()
     if isinstance(locations, dict):  # one field: the API returns a dict, not a list
         locations = [locations]
-    return weather_from_open_meteo(locations, first_hour, n_hours, params)
+    return locations
 
 
 def weather_from_open_meteo(locations, first_hour, n_hours, params):
-    """Open-Meteo's answer (one dict per field) -> {name: [1, field, hour]} from first_hour.
+    """Open-Meteo's answer (one dict per field) -> a table from first_hour.
 
     Hour h is the hour from h to h + 1, so its rain is the value Open-Meteo gives at h + 1.
+    returns: one row per hour and field: hour (season hour), member (0), field, lat, lon (the
+             field's), temp_c, humidity_pct, rain_mm
     """
     first = (first_hour - first_hour.normalize()) // ONE_HOUR  # the answer starts at midnight
     rows = []
@@ -291,6 +372,8 @@ def weather_from_open_meteo(locations, first_hour, n_hours, params):
                     "hour": hour,
                     "member": 0,
                     "field": field["name"],
+                    "lat": field["lat"],
+                    "lon": field["lon"],
                     "temp_c": hourly["temperature_2m"][first + hour],
                     "humidity_pct": hourly["relative_humidity_2m"][first + hour],
                     "rain_mm": hourly["precipitation"][first + hour + 1],
@@ -300,4 +383,4 @@ def weather_from_open_meteo(locations, first_hour, n_hours, params):
     table["rain_mm"] = table["rain_mm"].fillna(0).clip(lower=0)  # the API rounds tiny rain to -0.1
     for column in ["temp_c", "humidity_pct"]:
         table[column] = table[column].ffill().bfill()  # fill the odd missing hour
-    return to_arrays(table, WEATHER_VARIABLES.values(), params)
+    return table

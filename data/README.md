@@ -52,7 +52,7 @@ This overwrites `forecast.csv` using the fields' `lat`/`lon` and the `forecast_*
 uv run python replay.py 2026-10-10 2026-10-25
 ```
 
-`replay.py` uses the forecasts that were really issued: every 00 UTC run of the ECMWF ensemble
+`replay.py` and `compare.py` use the forecasts that were really issued: every 00 UTC run of the ECMWF ensemble
 (51 members, 0.25° grid) since 2024-04-01, from the
 [dynamical.org archive](https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/)
 (`past_forecast_dataset` in `params.yaml`, free, no account). A run can only be used
@@ -74,8 +74,14 @@ Each run is downloaded the first time it's needed (about 5-10 s) and saved in
 | `precip_mm_per_s` | precipitation rate, average since the row before (empty at hour 0) | mm/s |
 
 `harvest/past_data.py` turns that into one value per hour: `temp_c`, `humidity_pct` and `rain_mm`
-(precipitation from hour `h` to `h + 1`). Delete the folder any time; runs are downloaded again
-when needed.
+(precipitation from hour `h` to `h + 1`). Next to the runs, `runs.csv` lists the start time of
+every run the archive had when it was last opened; it's opened again only when the next run after
+the newest one in it (`forecast_run_every_hours` later) could be published before the replay ends.
+
+The weather that happened is saved too, in `data/replay_weather/<model>/<first hour>_<hours>h.csv`
+(not in git): one row per season hour and field with `hour`, `member` (0), `field`, `lat`, `lon`,
+`temp_c`, `humidity_pct` and `rain_mm`. So replaying the same dates again, once they're over,
+needs no internet. Delete either folder any time; it's downloaded again when needed.
 
 ## Past weather (needs internet)
 

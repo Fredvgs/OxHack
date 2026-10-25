@@ -127,7 +127,7 @@ def rollout(schedule, scenarios, state, params):
     n_scenarios, n_fields, n_hours = scenarios.shape
     machines = params["machines"]
     travel = np.ceil(np.array(params["travel_hours"])).astype(int)  # whole hours, as simulate.py
-    idle_gbp = params["mpc_idle_in_field_gbp_per_hour"]
+    idle_gbp = params["idle_in_field_gbp_per_hour"]
     remaining = np.tile(np.array(state["remaining_ha"], dtype=float), (n_scenarios, 1))
     at = list(state["machine_at"])  # place each machine is at or driving to
     ready = [0] * len(machines)  # hour each machine finishes driving
@@ -142,7 +142,7 @@ def rollout(schedule, scenarios, state, params):
                 ready[m] = hour + travel[at[m], target]
                 at[m] = target
             if hour < ready[m]:
-                profit -= params["mpc_drive_gbp_per_hour"]
+                profit -= params["drive_gbp_per_hour"]
             elif at[m] < n_fields:  # in a field: cut if there's grain and it's worth cutting
                 field = at[m]
                 value = scenarios[:, field, hour]  # [scenario]
@@ -211,8 +211,8 @@ def best_route(start, rate_ha_per_hour, scenarios, left_ha, taken, params):
     n_places = n_fields + 1  # the fields, then the depot
     depot = n_fields
     travel = np.ceil(np.array(params["travel_hours"])).astype(int)
-    idle_gbp = params["mpc_idle_in_field_gbp_per_hour"]
-    drive_gbp = params["mpc_drive_gbp_per_hour"]
+    idle_gbp = params["idle_in_field_gbp_per_hour"]
+    drive_gbp = params["drive_gbp_per_hour"]
     value = scenarios.mean(axis=0)  # [field, hour] expected £/ha
     dry = (scenarios > 0).mean(axis=0)  # [field, hour] share of scenarios it can be cut in
     # [field, hour] expected £ for each hectare it would cut, net of the terminal value it uses up

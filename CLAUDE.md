@@ -6,15 +6,15 @@ Forecast CSV → value function (£/ha per field per hour) → planner (which fi
 - Install: `uv sync`
 - Check, run before saying "done": `uv run ruff check . && uv run pytest -q`
 - Format: `uv run ruff format .`
-- Run: `uv run python run.py` (prints results and opens a matplotlib window)
-- Compare planners: `uv run python compare.py` (runs every `plan_*` in `harvest/planners/`)
+- Live run, today's forecast: `uv run python run.py` (prints results and opens a matplotlib window)
 - Replay past dates with real past forecasts: `uv run python replay.py 2026-10-10 2026-10-25 [planner]` (needs internet the first time)
+- Compare planners on past dates: `uv run python compare.py 2026-10-10 2026-10-25` (every `plan_*` in `harvest/planners/`, same data as replay)
 - Fresh forecast: `uv run python data/download_forecast.py`
 
 ## Map
-- `params.yaml`: every number. `run.py`: runs everything, prints results and plots them. `compare.py`: same for every planner, plus a side-by-side window.
+- `params.yaml`: every number. Three modes: `run.py` (live: today's forecast, one member as the truth), `replay.py` (one planner on past dates), `compare.py` (every planner on past dates, plus a side-by-side window). Their settings are grouped in `params.yaml` the same way.
 - `harvest/forecast.py` → `value.py` → `planners/`, looped by `simulate.py`. **Inputs, outputs and array shapes of every function: `harvest/README.md`.**
-- `replay.py`: replays past dates; `harvest/past_data.py` fetches the past forecast runs (dynamical.org, saved in `data/past_forecasts/`) and the weather that happened (Open-Meteo).
+- Past dates: `harvest/past_data.py` (`past_rollout`) fetches the past forecast runs (dynamical.org, saved in `data/past_forecasts/`) and the weather that happened (Open-Meteo).
 - `scripts/`: helper scripts run by hand (`uv run python scripts/<name>.py`): `moisture_forecast.py` makes `outputs/moisture_forecast.csv` for `run.py`; `plot_*.py` and `moisture_sensitivity.py` save charts to `outputs/`; `rain_sensitivity.py` prints how much the rain settings matter.
 - `data/forecast.csv`: prediction data, format in `data/README.md`. `tests/test_pipeline.py`: all tests.
 

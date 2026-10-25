@@ -30,8 +30,8 @@ fields:
   - {name: cork_ie,       crop: barley, area_ha: 35, lat: 51.90, lon: -8.47}
   - {name: valladolid_es, crop: wheat,  area_ha: 30, lat: 41.65, lon: -4.72}
   - {name: poznan_pl,     crop: barley, area_ha: 45, lat: 52.40, lon: 16.90}
-  - {name: bergen_no,     crop: wheat,  area_ha: 25, lat: 60.39, lon: 5.32}
-  - {name: cherkasy_ua,   crop: barley, area_ha: 30, lat: 49.40, lon: 32.00}
+  - {name: bergen_no,     crop: wheat,  area_ha: 30, lat: 60.39, lon: 5.32}
+  - {name: cherkasy_ua,   crop: osr,    area_ha: 25, lat: 49.40, lon: 32.00}
 
 machines:  # start: depot or a field name
   - {name: combine_a, ha_per_hour: 3.0, start: depot}

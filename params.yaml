@@ -95,8 +95,8 @@ running_costs:
   repairs_gbp_per_engine_hour: 31      # 23% of a £400k list price over 3,000 h (Calcante et al. 2013)
 
 # Planner costs: rough numbers the planners steer by. Scoring uses running_costs.
-idle_in_field_gbp_per_hour: 20
-drive_gbp_per_hour: 10
+idle_in_field_gbp_per_hour:  19
+drive_gbp_per_hour: 95
 depot_when_idle: true              # send idle combines home if cheaper (every planner but mpc)
 depot_margin_gbp: 20               # only if it saves more than this
 

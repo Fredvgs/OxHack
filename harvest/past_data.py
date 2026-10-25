@@ -5,8 +5,9 @@ past_rollout() gives everything run_with_forecasts needs; the rest of this file 
 Past forecasts: dynamical.org keeps every 00 UTC run of the ECMWF ensemble (51 members, 0.25°
 grid) since 2024-04-01: https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/
 Each run is downloaded the first time it's needed and saved in data/past_forecasts/, so a replay
-only downloads once. The archive has a value every 3 hours (every 6 after 144 h); to_hourly()
-turns that into one value per hour.
+only downloads once, even after the fields move, as long as they stay in grid squares saved
+before. The archive has a value every 3 hours (every 6 after 144 h); to_hourly() turns that
+into one value per hour.
 
 Past weather: Open-Meteo's archive of past_weather_model's forecasts (Met Office UK 2 km), the
 first hours of each run stitched together, hourly: https://open-meteo.com/en/docs/historical-forecast-api
@@ -201,20 +202,70 @@ def past_forecasts(runs, first_hour, params):
 def load_run(run, params):
     """One past run at every field, hourly: {name: [member, field, hour since the run started]}.
 
-    Read from data/past_forecasts/ if it was saved before for the same fields, otherwise
-    downloaded and saved there first. None if the archive doesn't have all of it yet.
+    Read from data/past_forecasts/ if it was saved before with every field's grid point,
+    otherwise downloaded and saved there first. None if the archive doesn't have all of it yet.
     """
     path = FORECAST_DIR / params["past_forecast_dataset"] / f"{run:%Y-%m-%dT%H}.csv"
-    table = saved_table(path, params)
+    table = saved_run_table(path, params)
     if table is None:
         print(f"downloading the {run:%Y-%m-%d %H:%M} run...")
         table = download_run(open_archive(params), run, params)
         if not is_complete(table):
             return None
-        path.parent.mkdir(parents=True, exist_ok=True)
-        table.to_csv(path, index=False)
+        save_run(path, table, params)
     steps = to_arrays(table, ARCHIVE_VARIABLES.values(), params)  # [member, field, step]
     return to_hourly(steps, np.sort(table["hour"].unique()), params)
+
+
+def save_run(path, table, params):
+    """Save a downloaded run, keeping the grid points saved before that it doesn't have.
+
+    So a run saved for one farm is still there after moving to another farm and back.
+    """
+    if path.exists():
+        old = pd.read_csv(path)
+        old_points, new_points = field_points(old, params), field_points(table, params)
+        keep = [  # a field name means one place, so an old field with a new name goes
+            name
+            for name, point in old_points.items()
+            if name not in new_points and point not in new_points.values()
+        ]
+        table = pd.concat([table, old[old["field"].isin(keep)]], ignore_index=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(path, index=False)
+
+
+def saved_run_table(path, params):
+    """The run saved at path, for these fields, or None if it lacks one of their grid points.
+
+    The archive has one value per grid point, so a run saved for other fields (an older farm)
+    still has the forecast of every field in the same grid square: no need to download it again.
+    """
+    if not path.exists():
+        return None
+    table = pd.read_csv(path)
+    saved_at = {point: name for name, point in field_points(table, params).items()}
+    parts = []
+    for field in params["fields"]:
+        source = saved_at.get(grid_point(field["lat"], field["lon"], params))
+        if source is None:
+            return None  # this grid point was never downloaded for this run
+        part = table[table["field"] == source].copy()
+        part["field"], part["lat"], part["lon"] = field["name"], field["lat"], field["lon"]
+        parts.append(part)
+    return pd.concat(parts, ignore_index=True)
+
+
+def field_points(table, params):
+    """{field name: its grid point} for the fields in a saved or downloaded run."""
+    saved = table.groupby("field")[["lat", "lon"]].first()  # one lat/lon per field
+    return {name: grid_point(lat, lon, params) for name, (lat, lon) in saved.iterrows()}
+
+
+def grid_point(lat, lon, params):
+    """The archive grid point nearest to lat, lon (what download_run picks): (lat, lon)."""
+    grid = params["past_forecast_grid_deg"]
+    return round(lat / grid) * grid, round(lon / grid) * grid
 
 
 def saved_table(path, params):
@@ -315,13 +366,13 @@ def relative_humidity_pct(temp_c, dew_point_c, params):
 def past_weather(first_hour, n_hours, params):
     """The weather that really happened at every field, hourly from first_hour.
 
-    Read from data/replay_weather/ if these hours were saved before for the same fields,
-    otherwise downloaded from Open-Meteo and saved there first.
+    Read from data/replay_weather/ if these hours were saved before for the same fields (in
+    any saved stretch that covers them), otherwise downloaded from Open-Meteo and saved there.
     returns: {"temp_c", "humidity_pct", "rain_mm"}: [1, field, hour] (one member: one past)
     """
     folder = WEATHER_DIR / params["past_weather_model"]
     path = folder / f"{first_hour:%Y-%m-%dT%H}_{n_hours}h.csv"
-    table = saved_table(path, params)
+    table = saved_weather_table(folder, first_hour, n_hours, params)
     if table is None:
         print("downloading the weather that happened...")
         locations = download_weather(first_hour, n_hours, params)
@@ -329,6 +380,27 @@ def past_weather(first_hour, n_hours, params):
         path.parent.mkdir(parents=True, exist_ok=True)
         table.to_csv(path, index=False)
     return to_arrays(table, WEATHER_VARIABLES.values(), params)
+
+
+def saved_weather_table(folder, first_hour, n_hours, params):
+    """The weather saved in folder for these hours and fields, or None.
+
+    Files are named after their first hour and length (2024-06-09T00_2256h.csv); any one whose
+    hours cover these will do, so a saved summer covers every week of it.
+    returns: as weather_from_open_meteo, with hour 0 = first_hour
+    """
+    for path in sorted(folder.glob("*_*h.csv")):
+        start, length = path.stem.split("_")
+        offset = (first_hour - pd.Timestamp(start)) // ONE_HOUR  # file hour of first_hour
+        if offset < 0 or offset + n_hours > int(length[:-1]):
+            continue
+        table = saved_table(path, params)
+        if table is None:
+            continue  # saved for other fields
+        table = table[(table["hour"] >= offset) & (table["hour"] < offset + n_hours)].copy()
+        table["hour"] -= offset
+        return table
+    return None
 
 
 def download_weather(first_hour, n_hours, params):

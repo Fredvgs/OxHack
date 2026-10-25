@@ -187,8 +187,8 @@ Two helpers, both `[machine, hour]` in and out:
 | `forecast_runs(end, params)` | last day | start times of the archive's runs, at least up to `end`; from the list saved in `data/past_forecasts/` while it's new enough, otherwise from the archive |
 | `season_dates(start, end, runs, params, now)` | first and last day | first hour and number of hours, cut (with a warning) to what the archives have and to the past |
 | `past_forecasts(runs, first_hour, params)` | | `(get_forecast, runs_used)`: `get_forecast` for `run_with_forecasts`, giving the newest run published by then (`forecast_delay_hours` after it starts) as `{"temp_c", "humidity_pct", "rain_mm"}` `[M, F, H]`; `runs_used` = `{season hour: run}` for each new run |
-| `past_weather(first_hour, n_hours, params)` | | the weather that happened, from Open-Meteo (`past_weather_model`): `{"temp_c", "humidity_pct", "rain_mm"}` `[1, F, H]`; saved in `data/replay_weather/` the first time |
-| `load_run(run, params)` | a run's start time | that run, hourly, `[M, F, H]` from its start; saved in `data/past_forecasts/` the first time |
+| `past_weather(first_hour, n_hours, params)` | | the weather that happened, from Open-Meteo (`past_weather_model`): `{"temp_c", "humidity_pct", "rain_mm"}` `[1, F, H]`; saved in `data/replay_weather/` the first time, and read from any saved stretch that covers these hours |
+| `load_run(run, params)` | a run's start time | that run, hourly, `[M, F, H]` from its start; saved in `data/past_forecasts/` the first time, and read from there for any fields in the same grid squares (`past_forecast_grid_deg`); saving keeps the grid points saved before, so moving the farm and back never downloads it again |
 | `to_hourly(steps, step_hours, params)` | archive steps (every 3 or 6 h) `[M, F, step]` | `[M, F, H]`: temperature in straight lines, rain spread over each step, humidity from the dew point (Magnus) |
 
 In both, the rain at hour `h` is the rain that falls from `h` to `h + 1`, and it's all

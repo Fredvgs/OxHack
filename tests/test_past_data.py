@@ -21,7 +21,8 @@ from harvest.past_data import (
     past_weather,
     published_runs,
     relative_humidity_pct,
-    saved_table,
+    save_run,
+    saved_run_table,
     season_dates,
     to_hourly,
 )
@@ -179,8 +180,44 @@ def test_a_saved_run_is_read_back_without_downloading(tmp_path, monkeypatch):
     assert weather["temp_c"][1, 1] == pytest.approx(10 + np.arange(6))
     assert weather["rain_mm"] == pytest.approx(0)
 
-    params["fields"][1]["lat"] = 51.0  # the field moved, so the saved run no longer fits
-    assert saved_table(path, params) is None
+    params["fields"][1]["lat"] = 51.0  # the field moved to another grid square: no longer fits
+    assert saved_run_table(path, params) is None
+
+
+def test_a_saved_run_is_reused_for_new_fields_in_the_same_grid_square(tmp_path):
+    params = {"past_forecast_grid_deg": 0.25}
+    path = tmp_path / "run.csv"
+    path.write_text(
+        "member,field,hour,lat,lon,temp_c\n0,old_a,0,52.40,0.60,10\n0,old_b,0,52.30,0.70,20\n"
+    )
+    # new_x is in old_b's square, new_y in old_a's: no download needed
+    params["fields"] = [
+        {"name": "new_x", "lat": 52.33, "lon": 0.74},
+        {"name": "new_y", "lat": 52.45, "lon": 0.58},
+    ]
+    table = saved_run_table(path, params)
+    assert list(table["field"]) == ["new_x", "new_y"]
+    assert list(table["temp_c"]) == [20, 10]
+    assert list(table["lat"]) == [52.33, 52.45]  # the field's own lat/lon, not the old field's
+    # a field in a square that was never saved: download the run again
+    params["fields"].append({"name": "far", "lat": 51.72, "lon": -1.10})
+    assert saved_run_table(path, params) is None
+
+
+def test_saving_a_run_keeps_the_other_farms_grid_points(tmp_path):
+    params = {"past_forecast_grid_deg": 0.25}
+    path = tmp_path / "run.csv"
+    oxford = pd.DataFrame({"field": ["barn"], "lat": [51.72], "lon": [-1.10], "temp_c": [5.0]})
+    suffolk = pd.DataFrame({"field": ["barn"], "lat": [52.43], "lon": [0.75], "temp_c": [9.0]})
+    save_run(path, oxford, params)
+    save_run(path, suffolk, params)  # the farm moved: the run is downloaded there
+    saved = pd.read_csv(path)
+    assert len(saved) == 1  # same name, so the old place goes: a name means one place
+    save_run(path, oxford.assign(field="oxford_barn"), params)
+    params["fields"] = [{"name": "barn", "lat": 52.43, "lon": 0.75}]
+    assert list(saved_run_table(path, params)["temp_c"]) == [9.0]  # Suffolk still saved
+    params["fields"] = [{"name": "oxford_barn", "lat": 51.72, "lon": -1.10}]
+    assert list(saved_run_table(path, params)["temp_c"]) == [5.0]
 
 
 def test_runs_still_being_added_are_spotted():
@@ -241,6 +278,20 @@ def test_past_weather_is_read_back_without_downloading(tmp_path, monkeypatch):
     params["fields"][1]["lat"] = 51.0  # the field moved, so the saved weather no longer fits
     with pytest.raises(AssertionError, match="went online"):
         past_weather(first_hour, 3, params)
+
+
+def test_past_weather_inside_a_saved_stretch_is_read_without_downloading(tmp_path, monkeypatch):
+    params = two_fields(demo_params())
+    monkeypatch.setattr(past_data, "WEATHER_DIR", tmp_path)
+    monkeypatch.setattr(past_data, "download_weather", lambda *args: fake_open_meteo(params))
+    past_weather(pd.Timestamp("2026-10-10 00:00"), 24, params)  # a whole day saved
+
+    offline(monkeypatch)
+    weather = past_weather(pd.Timestamp("2026-10-10 06:00"), 3, params)  # 3 hours of it
+    assert weather["temp_c"][0, 0] == pytest.approx([6, 7, 8])
+    assert weather["rain_mm"][0, 1] == pytest.approx([107, 108, 109])
+    with pytest.raises(AssertionError, match="went online"):  # runs past the saved day
+        past_weather(pd.Timestamp("2026-10-10 22:00"), 3, params)
 
 
 def test_a_past_rollout_gives_run_with_forecasts_what_it_needs(monkeypatch):

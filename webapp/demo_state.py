@@ -68,6 +68,12 @@ def machine_label(machine):
     return machine["name"].replace("_", " ").title()
 
 
+def short_label(label):
+    """A field's label for tight spaces: "Field 7" -> "7", "Culford Heath" -> "Culford"."""
+    words = label.split()
+    return words[-1] if words[-1].isdigit() else words[0]
+
+
 def latlng(lonlat):
     """[..., 2] lon/lat -> nested lists of [lat, lng], the order Leaflet wants, to ~10 cm."""
     return np.round(np.asarray(lonlat)[..., ::-1], 6).tolist()
@@ -84,7 +90,7 @@ def farm():
             {
                 "name": field["name"],
                 "label": labels[f],
-                "short": labels[f].split()[0],  # "Culford Heath" -> "Culford", for tight spaces
+                "short": short_label(labels[f]),  # for tight spaces, e.g. map labels
                 "crop": field["crop"],
                 "area_ha": field["area_ha"],
                 "centre": [field["lat"], field["lon"]],  # the middle of its parcels, for labels

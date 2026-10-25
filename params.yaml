@@ -35,8 +35,8 @@ fields:
   - {name: great_leys,    crop: osr,    area_ha: 25, lat: 51.7255, lon: -1.1010}
 
 machines:  # start: depot or a field name
-  - {name: combine_a, ha_per_hour: 3.0, start: depot}
-  - {name: combine_b, ha_per_hour: 2.5, start: depot}
+  - {name: combine_a, ha_per_hour: 2.0, start: depot}
+  - {name: combine_b, ha_per_hour: 2.0, start: depot}
   - {name: combine_c, ha_per_hour: 2.0, start: depot}
 
 # Fields in the order above, then the depot. Rounded up to whole hours.

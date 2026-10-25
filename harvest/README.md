@@ -58,6 +58,17 @@ Without either, a simple model (dries with low humidity, wets with rain).
 And **`member_values(...)`**: same inputs, out `[M, F, H]`, the value in each member before
 averaging. `field_values` is its average over members.
 
+How a value is worked out, per member, field and hour:
+`delivered_tonnes_per_ha × (price − drying_cost_gbp_per_t)`, shrunk by `loss_pct_per_hour` for
+every hour the crop has stood, and 0 in rain or when too wet to combine.
+- **`delivered_tonnes_per_ha(moisture, params)`**: `[M, F, H]` → `[M, F, H]`. `yield_t_per_ha` is
+  quoted at `yield_moisture_pct`; the dry matter is fixed, so drier grain weighs less and wetter
+  grain more. UK terms pay no bonus for dry grain, so the lost weight is lost money.
+- **`drying_cost_gbp_per_t(moisture, params)`**: Camgrain's charge per 0.5% band above the crop's
+  `free_drying_up_to_pct`, plus the weight the store keeps for drying down to its
+  `target_moisture_pct`. Both are per crop: cereals 15% and 14%, oilseed rape 9% and 9%.
+- Value peaks at 14-14.5% for cereals and 9% for oilseed rape, and falls on both sides.
+
 And **`start_moisture(weather, params)`**: in `[M, F, H]`, out `[F]` grain moisture (%) of each
 field at hour 0: hour 0 of `weather["moisture_pct"]` averaged over members, or the placeholder
 `temp_start_moisture_pct` for every field when there is no moisture forecast.

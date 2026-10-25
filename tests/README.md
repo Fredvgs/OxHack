@@ -10,6 +10,8 @@ uv run pytest
 
 - the forecast CSV loads into `[member, field, hour]` arrays;
 - the value function gives one number (≥ 0) per field and hour;
+- drier grain weighs less and wetter grain more (fixed dry matter), and oilseeds are dried to 9%
+  (free at 9%) while cereals are dried to 14% (free up to 15%);
 - the simulator, on a tiny hand-made farm:
   - staying on field 0 earns £200, the best possible;
   - driving to field 1 earns £160, because 2 hours are lost to driving;

@@ -49,14 +49,31 @@ travel_hours:
   - [0.25, 0.75, 0.50, 0.25, 0.75, 0.50, 0.00]
 
 crops:
-  wheat:  {price_gbp_per_t: 190, yield_t_per_ha: 8.5}
-  barley: {price_gbp_per_t: 170, yield_t_per_ha: 7.0}
+  wheat:
+    price_gbp_per_t: 196.2   # Ex-farm, Wed 14 Oct 2026, merchant data collected by Farmers Weekly (fwi.co.uk, "English barley harvest falls to 14-year low as wheat edges higher", 15 Oct 2026). Delivery month not stated.
+    yield_t_per_ha: 6.9      # AHDB final harvest report, 25 Sep 2026: UK survey average, wheat
+    yield_moisture_pct: 14.5 # Scottish Government harvest methodology: cereal yields adjusted to 14.5%. ASSUMPTION that the AHDB figure uses the same basis; AHDB does not state one.
+    target_moisture_pct: 14.0       # Camgrain 2025/2026: cereals dry to 14%
+    free_drying_up_to_pct: 15.0     # Camgrain 2025/2026: cereal drying free below 15.1%
+  barley:
+    price_gbp_per_t: 182.6   # same source, date and basis as wheat (feed barley)
+    yield_t_per_ha: 6.9      # AHDB final harvest report, 25 Sep 2026: UK survey average, WINTER barley (spring barley was 4.8)
+    yield_moisture_pct: 14.5 # as wheat
+    target_moisture_pct: 14.0
+    free_drying_up_to_pct: 15.0
+  osr:
+    price_gbp_per_t: 468.0   # AHDB Arable Market Report 19 Oct 2026: delivered Erith, Nov-26, Friday survey. DELIVERED, not ex-farm (no ex-farm OSR price found), so it overstates what a farmer receives.
+    yield_t_per_ha: 4.0      # AHDB final harvest report, 25 Sep 2026: UK survey average, oilseed rape
+    yield_moisture_pct: 9.0  # Scottish Government harvest methodology: oilseed rape adjusted to 9.0%. ASSUMPTION that the AHDB figure uses the same basis.
+    target_moisture_pct: 9.0        # Camgrain 2025/2026: oilseeds dry to 9%
+    free_drying_up_to_pct: 9.0      # Camgrain 2025/2026: oilseed drying free below 9.1%
 
-# Value function (harvest/value.py). Drying charges from Camgrain, harvest 2026.
+# Value function (harvest/value.py). Drying charges from Camgrain 2025/2026, harvest 2026
+# (https://www.camgrain.co.uk/charges-for-2025). The drying target and the free level are per crop
+# (target_moisture_pct, free_drying_up_to_pct under crops: above); the oilseed values come from the
+# same Camgrain page. The band, the charge per band and the weight deduction are the same for both.
 temp_start_moisture_pct: 18        # TODO: replace with the moisture model's hour 0
-target_moisture_pct: 14.0
 weight_loss_pct_per_pct: 1.25      # weight deducted per point dried
-free_drying_up_to_pct: 15.0
 drying_band_pct: 0.5
 drying_charge_gbp_per_band: 2.0    # per tonne
 max_harvest_moisture_pct: 25       # too wet to combine above this
@@ -64,7 +81,7 @@ min_moisture_pct: 12
 drying_pct_per_hour: 0.3           # in dry air, scaled by (100 - humidity) / 100
 rewetting_pct_per_mm: 0.5
 rain_limit_mm: 0.2                 # no cutting in an hour wetter than this
-loss_pct_per_hour: 0.05            # crop value lost per hour left standing
+loss_pct_per_hour: 0.015           # crop value lost per hour left standing. 0.015 %/h, chosen by the project owner; sits at the top of the overlap of Bolland 1984, Aust. J. Exp. Agric. 24: 391-395 (0.18-0.75 %/day = 0.0075-0.031 %/h) and the BCG Australian barley trial (0.001-0.015 %/h). No oilseed-specific source.
 
 # Running costs (harvest/simulate.py): what every plan is scored with, per combine-hour.
 #   cutting: diesel + operator + repairs     driving: diesel + operator + escort + repairs

@@ -18,7 +18,7 @@ yard_gap_m: 60                # how far apart combines park at the yard, in a ro
 steps_per_hour: 6             # combine positions sent per simulated hour; the browser draws in between
 play_seconds_per_hour: 0.5    # playback speed: one simulated hour takes this long
 
-# Control panel
+# What each plan's outlook and the combine cards are built from
 band_percentiles: [10, 50, 90]  # forecast members summarised as low / middle / high moisture
 rain_chance_pct: 50           # "rain likely" when at least this % of members rain more than rain_limit_mm
 compare_hours: 24             # the combine card compares cutting now with cutting this many hours later

@@ -1,7 +1,7 @@
-"""Words for the panel: the combine cards, and what changed at each replan.
+"""Words for the pages: the combine cards, and what changed at each replan.
 
 Every sentence is built from numbers the model worked out (see bridge.run_demo), so nothing on
-the panel is made up. Moisture and rain come from the forecast the plan in force was made with.
+the pages is made up. Moisture and rain come from the forecast the plan in force was made with.
 """
 
 import numpy as np

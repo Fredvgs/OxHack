@@ -1,6 +1,6 @@
 // Shared by every page: the data from the server, the live clock, the top strip, alerts, the
 // short messages pretend buttons answer with, pretend switches and machine readings.
-// What things look like: farmer/DESIGN.md.
+// What things look like: webapp/DESIGN.md.
 
 export const $ = (selector, root = document) => root.querySelector(selector);
 

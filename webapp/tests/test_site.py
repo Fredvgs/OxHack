@@ -1,13 +1,13 @@
-"""Tests for the farmer site's Python side. No internet; no web server needed.
+"""Tests for source.py, what the pages get. No internet; no web server needed.
 
-uv run pytest farmer/tests -q
+uv run pytest webapp/tests -q
 """
 
 import json
 
 import numpy as np
 
-from farmer import source
+from webapp import source
 
 
 def test_field_status_from_when_it_can_be_cut():

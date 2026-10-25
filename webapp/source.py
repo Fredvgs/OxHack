@@ -1,9 +1,9 @@
-"""What the farmer site shows, in farmer terms, from the simulated season.
+"""What the web app shows, in farmer terms, from the simulated season.
 
-The only file in farmer/ that imports the rest of the repo: it reads the season the control panel
-in webapp/ already works out (webapp.demo_state, read-only) and turns the model's numbers into
-what a farmer needs: each field Ready / Soon / Wait / Done, its best time, its grain moisture,
-and what each combine is doing and does next. The algorithm itself stays out of sight.
+It reads the season demo_state.py works out (through bridge.py, the only file that imports
+harvest/) and turns the model's numbers into what a farmer needs: each field Ready / Soon / Wait /
+Done, its best time, its grain moisture, and what each combine is doing and does next. The
+algorithm itself stays out of sight.
 """
 
 from functools import cache
@@ -15,13 +15,13 @@ import yaml
 
 from webapp import demo_state
 
-FARMER = Path(__file__).parent
+WEBAPP = Path(__file__).parent
 
 
 @cache
 def settings():
-    """farmer/site.yaml"""
-    return yaml.safe_load((FARMER / "site.yaml").read_text(encoding="utf-8"))
+    """webapp/site.yaml"""
+    return yaml.safe_load((WEBAPP / "site.yaml").read_text(encoding="utf-8"))
 
 
 @cache
@@ -164,7 +164,7 @@ def next_visit(f, hour, schedule, plan, letters):
 
     schedule: [machine, hour from now] the plan in force, field index per hour
     returns: "now · A" while a combine is cutting it, "A · Mon 07:00" for the first hour a
-             combine is sent there (as the control panel's "next"), or None if it never is
+             combine is sent there (as the combine card's "next"), or None if it never is
     """
     cutting = [
         letters[m]

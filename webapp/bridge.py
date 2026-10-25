@@ -5,7 +5,7 @@ It runs the demo's week one of two ways, set by season_start in demo.yaml:
   happens; the planner only sees the others);
 - a date: that past week replayed the way replay.py does (the forecasts as issued then, and the
   weather that really followed, from harvest/past_data.py).
-Then it collects what the control panel shows on top of the result: the forecast as the planner
+Then it collects what the pages show on top of the result: the forecast as the planner
 saw it at each replan, and what really happened. If harvest/ changes its inputs or outputs, this
 is the file to fix.
 """
@@ -39,7 +39,7 @@ def load_settings():
 
 
 def run_demo(params, demo):
-    """Run the demo's week (see the top of this file) and collect everything the panel needs.
+    """Run the demo's week (see the top of this file) and collect everything the pages need.
 
     returns: {
         "result":            run_season's result (see harvest/README.md)

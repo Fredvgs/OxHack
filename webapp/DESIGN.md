@@ -5,40 +5,63 @@ Survey map and the Met Office shipping forecast. Dense, tabular, plain, confiden
 landing page.
 
 ## Look
-- Colours only from `css/tokens.css`. Each colour means one thing:
-  paper → straw → soil = what cutting is worth (the decision map's steps, also on the map's
-  fields); pale paper on the map = already cut; rain = rain; alarm = too wet or value lost;
-  ink / ink-2 = text; rule = hairlines; wheat / barley / osr = the crop, only as a field's outline
-  on a map and as a short bar next to the crop's word in keys and tables. No Tailwind palette
-  colours (indigo, violet, slate...).
+- Colours only from `css/tokens.css`: paper background, ink / ink-2 text, rule hairlines, rain
+  for rain, alarm for too wet or value lost. No Tailwind palette colours (indigo, violet, slate...).
 - No gradients, glows, blur, glassmorphism or box-shadows. Corner radius 0-2px.
 - Separate content with 1px rules (`var(--rule)`) and space, not cards with shadows.
-- Newsreader for text; IBM Plex Mono with `tabular-nums` for every number and time. Never Inter.
-- Left-aligned, asymmetric grid: three blocks on one screen, weather (wide, top left), farm map
-  (top right), the plan's decision map (full width, bottom). No centred hero, no three-card
-  feature row. Blocks are 1px rule boxes, no shadows.
+- Newsreader for words; IBM Plex Mono with `tabular-nums` for every number and time. Never Inter.
+- Left-aligned, asymmetric layouts. No centred hero, no three-card feature row.
 - Fonts are in `static/fonts/`, not loaded from Google, so the venue wifi can't break them.
 
-## Content
+## Status: a small square lamp and its word, never colour alone
+| Status | Lamp | Meaning |
+|---|---|---|
+| ready | field green `--ready` | can be cut now |
+| soon | straw `--soon` | a window opens within hours |
+| wait | brick `--wait` | not today |
+| done | hollow `--done` | all cut |
+
+These four colours are only for field status (and the matching good / fair / poor hours on the
+Weather page).
+
+## Crop: the field's outline colour, and a short bar next to its word
+Wheat, barley and OSR have their own colours (`--wheat`, `--barley`, `--osr`): the outline of
+every field on the map, and a short bar (never a square, so it isn't read as a lamp) before the
+crop's word in keys and tables. Weather maps keep their own colour scales because they are data,
+always with a legend.
+
+## Few words, big answers
+- Each page opens with one sentence that answers the question, e.g. "Cut today." then one line of
+  why, built from the numbers.
+- Everything else is tables with short column heads, figures in mono.
 - Every claim has a number, a unit, a time or a source. Format: `£1,912/ha`, `19.4%`, `Tue 14:00`.
+- No algorithm words (planner, ensemble, member, optimiser). Say ready, best time, plan, forecast.
 - Write like an agronomist texting a farmer. Banned words: seamless, revolutionise, unlock,
   empower, leverage, harness, cutting-edge, reimagine, effortless, powerful.
-- No badges, testimonials, invented stats, logo clouds, pricing, or footer link columns.
-- No emoji. Icons only where a word won't do.
-- Say what the model doesn't know (see "How it knows" on the panel). Honesty reads as human.
+- No icons, emoji, pills, rings, avatars, badges, testimonials, invented stats, logo clouds or
+  pricing. A word or a lamp does the job.
 - No dead links or placeholder text. A button that doesn't work yet isn't shown.
 
-## Charts (Observable Plot)
+## Controls
+- Buttons: ink rectangles (main) or outlined (secondary), 44px tall, mono labels.
+- Switches: a square ON / OFF box on the right of a hairline row.
+- Buttons and switches on the Control page are pretend: they answer with a short message
+  bottom-left and remember their state while browsing, but don't change the plan.
+
+## Charts
 - Direct labels at the right-hand end, no legend boxes.
-- Uncertainty as a band (10th-90th percentile of forecast members), not a single line.
-- Straight lines between hourly points, never smoothed.
-- Night hours shaded. Midnight ticks labelled "Tue 27".
+- Straight lines between hourly points, never smoothed. Midnight ticks labelled "Tue 27".
 - The "now" line is the one thing that moves when time moves.
-- All time charts share the same left and right margins so their hours line up.
+- Charts that share an hour axis share their left and right margins, so their hours line up.
 
 ## Motion
-- Only things that change with time move: combines, the cut area, the now line.
-- No scroll animations, no counting-up numbers, no hover lifts.
+- Only things that change with time move: combines, the cut area, the now line, the home page's
+  footage. No scroll animations, no counting-up numbers, no hover lifts.
+
+## Real and pretend
+- Weather is real (Open-Meteo forecast, RainViewer radar), fetched live by the browser.
+- Fields, combines and GPS come from the simulated season (`source.py`).
+- Machine readings (fuel, tank, speed) are pretend.
 
 ## When building with an AI assistant
 After each change, list any default you fell back on (font, colour, radius, shadow, copy) so it

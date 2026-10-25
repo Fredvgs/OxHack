@@ -1,4 +1,4 @@
-// The Today page's two charts, plain SVG in the demo's colours (webapp/DESIGN.md), on one hour
+// The Today page's two charts, plain SVG in the site's colours (webapp/DESIGN.md), on one hour
 // axis for the whole season: what each field is worth if cut each hour, with where the plan sends
 // each combine; and each combine's hours, what it did so far and what the plan has it do next.
 

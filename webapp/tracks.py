@@ -2,7 +2,7 @@
 
 The model only knows which field a combine is in. On the map, a combine cuts a field in passes up
 and down, parallel to the field's longest side, and how far along those passes it has got is the
-share of the field cut so far. So the map always agrees with the % cut on the panel.
+share of the field cut so far. So the map always agrees with the % cut on the pages.
 
 Positions are in metres east and north of the yard; to_lonlat turns them into map coordinates.
 """

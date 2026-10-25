@@ -5,6 +5,8 @@ import { $, ACTIVITY, crop, everySecond, lamp, load, makeClock, showAlerts, tele
 import { gridBounds, gridForecast, gridImage, legend, nowIndex, radarFrames, windArrows } from "./weather-data.js";
 
 const { farm, season } = await load();
+// radar is live only: a demo replaying a past week has none to show
+if (farm.week) $("#layer-radar").closest("label").style.display = "none";
 const clock = makeClock(farm);
 topbar(farm, "map.html", clock);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();

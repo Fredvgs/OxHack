@@ -81,7 +81,7 @@
   <section class="method">
     <div>
       <h2>How it knows</h2>
-      <p>Weather comes from the Met Office 2&nbsp;km ensemble forecast: <span data-fill="members"></span> possible
+      <p>Weather comes from the <span data-fill="forecast_name"></span>: <span data-fill="members"></span> possible
         futures for every hour and field. Grain moisture follows each future from the latest meter
         reading, using Henderson's equilibrium moisture, Arrhenius drying rates and Smith, Bailey
         &amp; Ingram's (1981) rain rule.</p>
@@ -99,8 +99,7 @@
           calibrating against meter readings in the field.</li>
         <li>Dew, sunshine and wind aren't modelled. Oilseed rape constants are borrowed from wheat
           and barley.</li>
-        <li>In this demo one forecast member plays the weather that really happened; the plan never
-          sees it. Each field gets the forecast for its own 2&nbsp;km square.</li>
+        <li><span data-fill="truth"></span></li>
         <li>The <span data-fill="fields"></span> fields on the plan are groups of real fields around
           Elveden, Suffolk, traced from this imagery: <span data-fill="real_fields"></span> fields,
           <span data-fill="total_ha"></span>&nbsp;ha, one crop per group. A combine is sent to a
@@ -111,7 +110,7 @@
   </section>
 
   <footer class="foot">
-    OxHack26 · Forecast: Met Office MOGREPS-UK via Open-Meteo · Imagery © Esri · Land use © OpenStreetMap contributors ·
+    OxHack26 · <span data-fill="credit"></span> · Imagery © Esri · Land use © OpenStreetMap contributors ·
     Code: <a href="https://github.com/leoS110/Oxhack">github.com/leoS110/Oxhack</a>
   </footer>
 </body>

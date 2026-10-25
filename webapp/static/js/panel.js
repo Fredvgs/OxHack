@@ -125,15 +125,20 @@ async function main() {
     drawMoisture($("moisture-chart"), farm, plan, selectedField, hour, planNow, height - Math.round(0.24 * height) - Math.round(0.28 * height) - 4);
   }
 
-  setTime(Number(options.get("t")) || 0); // ?t=30 opens at hour 30
+  // opens at the hour it is now (the demo runs in real time); ?t=30 opens at hour 30 instead
+  const realHour = (Date.now() - Date.parse(plan.clock_start_utc)) / 3.6e6;
+  setTime(options.has("t") ? Number(options.get("t")) : Math.max(0, Math.min(realHour, plan.hours)));
 }
 
 function fillStaticText(farm, plan) {
   $("farm-name").textContent = farm.farm_name;
-  $("forecast-info").textContent = `Met Office UK ensemble forecast, ${plan.forecast.members} members, from ${plan.forecast.start}`;
+  $("forecast-info").textContent = `${plan.forecast.forecast}, ${plan.forecast.members} members, from ${plan.forecast.start}`;
   const values = {
     ...plan.limits,
     members: plan.forecast.members,
+    forecast_name: plan.forecast.forecast,
+    truth: plan.forecast.truth,
+    credit: plan.forecast.credit,
     fields: farm.fields.length,
     real_fields: farm.fields.reduce((sum, field) => sum + field.outline.length, 0), // one outline each
     total_ha: Math.round(farm.fields.reduce((sum, field) => sum + field.area_ha, 0)).toLocaleString("en-GB"),

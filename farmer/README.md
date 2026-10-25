@@ -26,19 +26,26 @@ Runs next to the demo (port 8000). Restart the server after changing Python file
 - **Real:** the weather. The browser fetches it live from [Open-Meteo](https://open-meteo.com)
   (forecast at the farm and on a 9 x 9 grid around it, for the maps) and
   [RainViewer](https://www.rainviewer.com/api.html) (radar, last 2 hours, up to zoom 7). No keys.
+  When the demo replays a past week (`season_start` in `webapp/demo.yaml`), it shows that week's
+  real weather instead: Open-Meteo's record of the Met Office 2 km model the demo's weather comes
+  from, with the chance of rain from the demo's own forecast (the record has none). Radar only
+  exists live, so its switches are hidden then.
 - **From the model:** fields, combines and GPS tracks come from the simulated season through
   `source.py`, which reads `webapp.demo_state`.
 - **Pretend:** machine readings (fuel, tank, speed) and every button and switch on the control
   panel. They respond (a switch stays switched, a toast says what happened) but don't change the plan.
 
-The fields' weather in the model is the Met Office forecast for the farm, but one forecast member
-plays the real weather (see the demo's caveats), so a field can show "Wait" while the real sky is dry.
+On today's forecast, one forecast member plays the real weather (see the demo's caveats), so a
+field can show "Wait" while the real sky is dry. A past week plays the weather that really
+followed, the same record the weather pages show.
 
 ## The clock
 
-The site follows real time through the season (`forecast_start` in `params.yaml` is hour 0).
-`?t=30` starts at hour 30 and `&speed=60` runs 60 times faster; both are remembered while you
-browse. Click the red clock to go back to live. The weather always shows the real now.
+The site follows real time through the season. On today's forecast, `forecast_start` in
+`params.yaml` is hour 0. A past week is played on today's date: the clock shows the week's date at
+today's time of day (at 08:20 it says Sun 09 Jun 08:20) and runs on from there. `?t=30` starts at
+hour 30 and `&speed=60` runs 60 times faster; both are remembered while you browse. Click the red
+clock to go back to live. The weather always shows the live hour.
 
 ## Files
 

@@ -10,6 +10,7 @@ from functools import cache
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import yaml
 
 from webapp import demo_state
@@ -28,7 +29,7 @@ def farm():
     """The farm: what doesn't change through the season."""
     base = demo_state.farm()
     plan = demo_state.plan()
-    params, _, _ = demo_state.season()
+    params, demo, _ = demo_state.season()
     site = settings()
     corners = np.concatenate(  # [corner, 2] lat, lng: every parcel's outer ring
         [np.array(parcel[0]) for field in base["fields"] for parcel in field["outline"]]
@@ -41,10 +42,41 @@ def farm():
         "machines": base["machines"],
         "centre": corners.mean(axis=0).round(5).tolist(),  # [lat, lng]
         "map": base["map"],
-        "season_start_utc": params["forecast_start"] + "Z",  # params.yaml times are UTC
+        "season_start_utc": plan["clock_start_utc"],  # the real moment that plays hour 0
         "hours": plan["hours"],
         "steps_per_hour": plan["steps_per_hour"],
         "site": {key: value for key, value in site.items() if key != "farm_name"},
+        "week": past_week(plan, params, demo),
+    }
+
+
+def past_week(plan, params, demo):
+    """When the demo replays a past week, what the browser needs to show that week's weather.
+
+    returns None for today's forecast, or {
+        "start_date", "end_date": "2024-06-09", local dates of the week
+        "model":          Open-Meteo model of the weather that really happened (past_weather_model)
+        "day_shift_days": the week's first day minus today, in days: today's time of day is
+                          shown on that date
+        "rain_chance_pct": {"2024-06-09T08:00": %} chance of rain each hour as the plan in force
+                           then saw it, averaged over the fields (archives have no chance of rain)
+    }
+    """
+    if not demo.get("season_start"):
+        return None
+    clock_day = pd.Timestamp(plan["clock_start_utc"]).tz_convert(demo["time_zone"]).normalize()
+    first_day = pd.Timestamp(plan["times_iso"][0]).normalize()
+    chance = {}
+    for hour, time in enumerate(plan["times_iso"][:-1]):
+        p = [p for p in plan["plans"] if p["hour"] <= hour][-1]  # the plan in force
+        column = hour - p["hour"]
+        chance[time] = round(100 * float(np.mean([row[column] for row in p["rain_chance"]])))
+    return {
+        "start_date": plan["times_iso"][0][:10],
+        "end_date": plan["times_iso"][-1][:10],
+        "model": params["past_weather_model"],
+        "day_shift_days": (first_day - clock_day.tz_localize(None)).days,
+        "rain_chance_pct": chance,
     }
 
 

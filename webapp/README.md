@@ -46,6 +46,16 @@ skip a field, combine unavailable until..., enter a meter reading), with a previ
 | `static/` | `panel.html`, `css/` (tokens + layout), `js/` (map, charts, panel), fonts, favicon |
 | `DESIGN.md` | **design rules for everything in `static/`: read before changing a page** |
 
+## The demo's week
+
+`season_start` in `demo.yaml` picks it. A date (e.g. `"2024-06-09"`) replays that week as
+`replay.py` does: the ECMWF ensemble forecasts as issued then, and the weather that really
+followed (`harvest/past_data.py`; the first start downloads them into `data/`, after that it runs
+offline). Empty: today's forecast, `data/forecast.csv`, one member playing the real weather, as
+`run.py` does. Either way the panel opens at the hour it is now: a past week is played on today's
+date, from today's time of day (`bridge.clock_start`). The tests always use today's forecast, so
+they never go online (`tests/conftest.py`).
+
 ## The demo farm
 
 `data/demo_farm.geojson` has one MultiPolygon per field and a point for the yard. A field in the

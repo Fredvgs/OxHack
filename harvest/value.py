@@ -45,8 +45,9 @@ def predict_moisture(start_moisture, weather, params):
         for f, field in enumerate(params["fields"]):
             temp_c = weather["temp_c"][:, f]  # [member, hour]
             rh = weather["humidity_pct"][:, f] / 100  # [member, hour] as a decimal
+            rain_mm = weather["rain_mm"][:, f]  # [member, hour]
             end_of_hour = simulate(
-                field["crop"], start_moisture[f], temp_c, rh, constants=constants
+                field["crop"], start_moisture[f], temp_c, rh, rain_mm, constants=constants
             )
             # the model gives the moisture at the END of each hour; we want the start
             moisture[:, f, 0] = start_moisture[f]

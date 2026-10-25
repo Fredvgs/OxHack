@@ -2,7 +2,8 @@
 
 Run:  uv run python scripts/moisture_forecast.py
 Writes outputs/moisture_forecast.csv: the forecast columns plus wheat_moisture_pct,
-barley_moisture_pct and osr_moisture_pct (% wet basis at the end of each hour).
+barley_moisture_pct and osr_moisture_pct (% wet basis at the end of each hour, including the
+rain rule for wheat and barley).
 Starting moistures and model constants: "moisture_model" in params.yaml.
 """
 

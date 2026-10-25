@@ -75,7 +75,7 @@ same and you can rewrite any piece.
 | `replay.py` | replays past dates with the real past forecasts and weather, prints and plots the path followed |
 | `harvest/` | the pipeline: `forecast.py`, `value.py`, `planners/` (one file per planner), `simulate.py`, and `past_data.py` for replays |
 | `data/` | the forecast CSV, its format, scripts to download a fresh one, and saved past forecasts (`past_forecasts/`, not in git) |
-| `scripts/` | helper scripts run by hand: `moisture_forecast.py` (makes `outputs/moisture_forecast.csv`, which `run.py` reads), the moisture sensitivity check, and `plot_*.py` charts |
+| `scripts/` | helper scripts run by hand: `moisture_forecast.py` (makes `outputs/moisture_forecast.csv`, which `run.py` reads), the moisture and rain sensitivity checks, and `plot_*.py` charts |
 | `outputs/` | CSV and PNG files written by `scripts/` |
 | `tests/` | `uv run pytest` |
 | `pyproject.toml`, `uv.lock`, `.python-version` | project setup used by uv; don't edit by hand |

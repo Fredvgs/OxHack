@@ -15,7 +15,7 @@ Forecast CSV → value function (£/ha per field per hour) → planner (which fi
 - `params.yaml`: every number. `run.py`: runs everything, prints results and plots them. `compare.py`: same for every planner, plus a side-by-side window.
 - `harvest/forecast.py` → `value.py` → `planners/`, looped by `simulate.py`. **Inputs, outputs and array shapes of every function: `harvest/README.md`.**
 - `replay.py`: replays past dates; `harvest/past_data.py` fetches the past forecast runs (dynamical.org, saved in `data/past_forecasts/`) and the weather that happened (Open-Meteo).
-- `scripts/`: helper scripts run by hand (`uv run python scripts/<name>.py`): `moisture_forecast.py` makes `outputs/moisture_forecast.csv` for `run.py`; `plot_*.py` and `moisture_sensitivity.py` save charts to `outputs/`.
+- `scripts/`: helper scripts run by hand (`uv run python scripts/<name>.py`): `moisture_forecast.py` makes `outputs/moisture_forecast.csv` for `run.py`; `plot_*.py` and `moisture_sensitivity.py` save charts to `outputs/`; `rain_sensitivity.py` prints how much the rain settings matter.
 - `data/forecast.csv`: prediction data, format in `data/README.md`. `tests/test_pipeline.py`: all tests.
 
 ## Ownership (fill in names)
